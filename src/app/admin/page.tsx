@@ -107,9 +107,12 @@ export default async function AdminPage() {
     supabase.from("admins_avora").select("*").order("created_at", { ascending: true }),
   ]);
 
+  const renderedAt = new Date().toISOString();
+
   return (
     <AdminDashboard
       userEmail={user.email || adminRecord.email}
+      renderedAt={renderedAt}
       settings={(settingsRes.data as SettingsAvora | null) || DEFAULT_SETTINGS}
       interests={(interestsRes.data as InterestOption[] | null) || []}
       members={(membersRes.data as MemberAvora[] | null) || []}

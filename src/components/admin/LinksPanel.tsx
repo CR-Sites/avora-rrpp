@@ -27,6 +27,7 @@ import type { ClickAvora, LinkAvora } from "@/types/avora";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { buildWaMeUrl } from "@/lib/telemetry";
 import { downloadCsv } from "@/lib/csv";
+import { formatArClickTime, formatArFullDateTime, getArHour } from "@/lib/datetime";
 import { WhatsAppSvg } from "@/components/AvoraIcons";
 import TelemetryModal from "./TelemetryModal";
 
@@ -133,7 +134,7 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
         identifiedClicks++;
         identifiedMembersSet.add(c.member_id);
       }
-      const hr = new Date(c.clicked_at).getHours();
+      const hr = getArHour(c.clicked_at);
       if (hr >= 0 && hr < 24) hours[hr]++;
 
       const cityLabel = [c.city, c.region].filter(Boolean).join(", ") || c.country || "No detectada";
@@ -342,7 +343,7 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
         "IP",
       ],
       visibleClicks.map((c) => [
-        new Date(c.clicked_at).toLocaleString("es-AR"),
+        formatArFullDateTime(c.clicked_at),
         c.links_avora?.title || selectedLink?.title || "",
         c.links_avora?.slug || selectedLink?.slug || "",
         c.members_avora?.full_name || "Anónimo",
@@ -847,13 +848,7 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
                   return (
                     <tr key={click.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-3 px-4 font-mono text-[11px] text-zinc-300 whitespace-nowrap">
-                        {new Date(click.clicked_at).toLocaleString("es-AR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
+                        {formatArClickTime(click.clicked_at)}
                       </td>
 
                       {selectedLinkId === "all" && (

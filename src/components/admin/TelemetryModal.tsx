@@ -3,6 +3,7 @@
 import React from "react";
 import { X, Globe, Smartphone, Clock, Cpu, Link2 } from "lucide-react";
 import type { ClickAvora, MemberAvora } from "@/types/avora";
+import { formatArDateTimeShort, formatArFullDateTime } from "@/lib/datetime";
 
 interface Props {
   title: string;
@@ -104,12 +105,7 @@ export default function TelemetryModal({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
                 <p className="text-zinc-400">
                   Fecha/Hora:{" "}
-                  <span className="text-zinc-200">
-                    {new Date(timestamp).toLocaleString("es-AR", {
-                      dateStyle: "short",
-                      timeStyle: "medium",
-                    })}
-                  </span>
+                  <span className="text-zinc-200">{formatArFullDateTime(timestamp)}</span>
                 </p>
                 <p className="text-zinc-400">
                   Zona Horaria: <span className="text-zinc-200">{data.timezone || "N/D"}</span>
@@ -158,12 +154,7 @@ export default function TelemetryModal({
                         </p>
                       </div>
                       <span className="text-[11px] font-mono text-zinc-400 shrink-0">
-                        {new Date(c.clicked_at).toLocaleString("es-AR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatArDateTimeShort(c.clicked_at)}
                       </span>
                     </div>
                   ))}

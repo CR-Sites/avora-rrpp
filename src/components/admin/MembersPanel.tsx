@@ -15,6 +15,7 @@ import {
 import type { ClickAvora, InterestOption, MemberAvora } from "@/types/avora";
 import { buildWaMeUrl } from "@/lib/telemetry";
 import { downloadCsv } from "@/lib/csv";
+import { formatArDateTimeShort, formatArFullDateTime } from "@/lib/datetime";
 import { WhatsAppSvg } from "@/components/AvoraIcons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import TelemetryModal from "./TelemetryModal";
@@ -23,10 +24,11 @@ interface Props {
   members: MemberAvora[];
   interests: InterestOption[];
   clicks: ClickAvora[];
+  renderedAt: string;
   onRefresh: () => void;
 }
 
-export default function MembersPanel({ members, interests, clicks, onRefresh }: Props) {
+export default function MembersPanel({ members, interests, clicks, renderedAt, onRefresh }: Props) {
   const [search, setSearch] = useState("");
   const [interestFilter, setInterestFilter] = useState<string>("all");
   const [onlyWithClicks, setOnlyWithClicks] = useState(false);
@@ -69,7 +71,7 @@ export default function MembersPanel({ members, interests, clicks, onRefresh }: 
 
   // Quick KPIs
   const stats = useMemo(() => {
-    const now = Date.now();
+    const now = new Date(renderedAt).getTime();
     const last7d = members.filter(
       (m) => now - new Date(m.created_at).getTime() <= 7 * 24 * 3600 * 1000
     ).length;
@@ -94,7 +96,7 @@ export default function MembersPanel({ members, interests, clicks, onRefresh }: 
     const mobilePct = members.length > 0 ? Math.round((mobileCount / members.length) * 100) : 0;
 
     return { last7d, topCity, topInterest, mobilePct };
-  }, [members]);
+  }, [members, renderedAt]);
 
   const handleExportFullCsv = () => {
     downloadCsv(
@@ -127,7 +129,7 @@ export default function MembersPanel({ members, interests, clicks, onRefresh }: 
         m.browser,
         m.in_app_source,
         m.ip_address,
-        new Date(m.created_at).toLocaleString("es-AR"),
+        formatArFullDateTime(m.created_at),
       ])
     );
   };
@@ -292,14 +294,7 @@ export default function MembersPanel({ members, interests, clicks, onRefresh }: 
                       <td className="py-3.5 px-4">
                         <p className="font-semibold text-white">{member.full_name}</p>
                         <p className="text-[11px] text-zinc-500 mt-0.5">
-                          Ingreso:{" "}
-                          {new Date(member.created_at).toLocaleString("es-AR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          Ingreso: {formatArDateTimeShort(member.created_at)}
                         </p>
                       </td>
 

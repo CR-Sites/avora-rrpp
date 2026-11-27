@@ -29,6 +29,7 @@ import SettingsPanel from "./SettingsPanel";
 
 interface Props {
   userEmail: string;
+  renderedAt: string;
   settings: SettingsAvora;
   interests: InterestOption[];
   members: MemberAvora[];
@@ -41,6 +42,7 @@ type ActiveTab = "members" | "links" | "settings";
 
 export default function AdminDashboard({
   userEmail,
+  renderedAt,
   settings,
   interests,
   members,
@@ -233,6 +235,7 @@ export default function AdminDashboard({
             members={members}
             interests={interests}
             clicks={clicks}
+            renderedAt={renderedAt}
             onRefresh={handleRefresh}
           />
         )}
