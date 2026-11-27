@@ -41,30 +41,8 @@ interface LocationCluster {
   recentItems: ZoneItem[];
 }
 
-const DARK_RASTER_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    carto_dark: {
-      type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-      ],
-      tileSize: 256,
-    },
-  },
-  layers: [
-    {
-      id: "carto-dark-base",
-      type: "raster",
-      source: "carto_dark",
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
-};
+const CARTO_API_KEY = process.env.NEXT_PUBLIC_CARTO_API_KEY?.trim() || "";
+const OPENFREEMAP_DARK_STYLE = "https://tiles.openfreemap.org/styles/dark";
 
 export default function LiveMapPanel({
   members,
@@ -217,48 +195,66 @@ export default function LiveMapPanel({
     const container = mapContainerRef.current;
     if (!container || mapInstanceRef.current) return;
 
+    const encodedKey = CARTO_API_KEY ? encodeURIComponent(CARTO_API_KEY) : "";
+    const styleUrl = encodedKey
+      ? `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json?key=${encodedKey}`
+      : OPENFREEMAP_DARK_STYLE;
+
     const map = new maplibregl.Map({
       container,
-      style: DARK_RASTER_STYLE,
+      style: styleUrl,
       center: [-58.2, -34.75],
       zoom: 8,
       attributionControl: false,
+      transformRequest: encodedKey
+        ? (url) => {
+            if (url.includes("cartocdn.com") && !url.includes("key=")) {
+              const sep = url.includes("?") ? "&" : "?";
+              return { url: `${url}${sep}key=${encodedKey}` };
+            }
+            return { url };
+          }
+        : undefined,
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 
     map.on("load", () => {
-      map.addSource("avora-heat", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
+      if (!map.getSource("avora-heat")) {
+        map.addSource("avora-heat", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+      }
 
-      map.addLayer({
-        id: "avora-heatmap-layer",
-        type: "heatmap",
-        source: "avora-heat",
-        paint: {
-          "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 1, 0.35, 15, 1],
-          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 13, 2.2],
-          "heatmap-color": [
-            "interpolate",
-            ["linear"],
-            ["heatmap-density"],
-            0,
-            "rgba(139, 92, 246, 0)",
-            0.25,
-            "rgba(139, 92, 246, 0.42)",
-            0.55,
-            "rgba(6, 182, 212, 0.72)",
-            0.85,
-            "rgba(167, 139, 250, 0.9)",
-            1,
-            "rgba(244, 244, 248, 0.95)",
-          ],
-          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 3, 22, 11, 48],
-          "heatmap-opacity": 0.85,
-        },
-      });
+      if (!map.getLayer("avora-heatmap-layer")) {
+        map.addLayer({
+          id: "avora-heatmap-layer",
+          type: "heatmap",
+          source: "avora-heat",
+          paint: {
+            "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 1, 0.35, 15, 1],
+            "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 13, 2.2],
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              0,
+              "rgba(139, 92, 246, 0)",
+              0.25,
+              "rgba(139, 92, 246, 0.42)",
+              0.55,
+              "rgba(6, 182, 212, 0.72)",
+              0.85,
+              "rgba(167, 139, 250, 0.9)",
+              1,
+              "rgba(244, 244, 248, 0.95)",
+            ],
+            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 3, 22, 11, 48],
+            "heatmap-opacity": 0.85,
+          },
+        });
+      }
 
       setMapReady(true);
     });
