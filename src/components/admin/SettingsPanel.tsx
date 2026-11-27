@@ -61,7 +61,7 @@ export default function SettingsPanel({ settings, interests, admins, onRefresh }
       const { error } = await supabase
         .from("settings_avora")
         .update({
-          brand_name: brandName.trim() || "AVORA",
+          brand_name: brandName.trim(),
           form_title: formTitle.trim(),
           form_subtitle: formSubtitle.trim(),
           whatsapp_invite_url: whatsappUrl.trim(),

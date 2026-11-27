@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { Check, ShieldCheck, ArrowRight, Sparkles, Lock, AlertCircle } from "lucide-react";
-import { AvoraLogoMark, WhatsAppSvg } from "./AvoraIcons";
+import { SonicPulseSvg, WhatsAppSvg } from "./AvoraIcons";
 import type { PublicFormConfig } from "@/types/avora";
 import { AVORA_ANON_COOKIE, AVORA_COOKIE_MAX_AGE } from "@/lib/cookies";
 
@@ -158,12 +157,14 @@ export default function PublicGateForm({ config }: Props) {
       <div className="w-full max-w-md mx-auto my-auto">
         {/* Top Brand Header */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-violet-500/30 bg-violet-950/25 mb-4">
-            <AvoraLogoMark className="w-5 h-5" />
-            <span className="text-xs font-semibold tracking-[0.22em] uppercase text-violet-200">
-              {config.brand_name}
-            </span>
-          </div>
+          {config.brand_name && config.brand_name.trim().length > 0 && (
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-violet-500/30 bg-violet-950/25 mb-4">
+              <SonicPulseSvg className="w-5 h-5 text-violet-400" />
+              <span className="text-xs font-semibold tracking-[0.22em] uppercase text-violet-200">
+                {config.brand_name}
+              </span>
+            </div>
+          )}
 
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight">
             {config.form_title}
@@ -344,17 +345,6 @@ export default function PublicGateForm({ config }: Props) {
           )}
         </div>
       </div>
-
-      {/* Subtle Footer */}
-      <footer className="mt-8 text-center">
-        <div className="inline-flex items-center gap-3 text-[11px] text-zinc-600">
-          <span>{config.brand_name} Official Access</span>
-          <span>•</span>
-          <Link href="/admin" className="hover:text-zinc-400 transition-colors">
-            Acceso Staff
-          </Link>
-        </div>
-      </footer>
     </main>
   );
 }

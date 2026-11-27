@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { parseUserAgent, resolveServerGeo } from "@/lib/telemetry";
 import { AVORA_ANON_COOKIE, AVORA_MEMBER_COOKIE } from "@/lib/cookies";
 import RedirectBridgeClient from "@/components/RedirectBridgeClient";
-import { AvoraLogoMark } from "@/components/AvoraIcons";
+import { SonicPulseSvg } from "@/components/AvoraIcons";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!link) {
     return {
-      title: "Enlace Finalizado — AVORA",
+      title: "Enlace Finalizado",
       description: "Este enlace ya no se encuentra activo.",
     };
   }
@@ -161,7 +161,7 @@ export default async function GoRedirectPage({ params, searchParams }: PageProps
     return (
       <main className="min-h-screen flex items-center justify-center bg-avora-bg text-white p-6">
         <div className="max-w-sm text-center space-y-3">
-          <AvoraLogoMark className="w-10 h-10 mx-auto" />
+          <SonicPulseSvg className="w-10 h-10 mx-auto text-violet-400" />
           <h1 className="text-xl font-bold">{link.og_title || link.title}</h1>
           <p className="text-sm text-zinc-400">{link.og_description}</p>
         </div>

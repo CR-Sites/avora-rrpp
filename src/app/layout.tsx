@@ -2,9 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AVORA — Electronic Music Community & Access",
-  description:
-    "Comunidad privada, accesos prioritarios y preventas oficiales para eventos de música electrónica.",
+  title: "Acceso Oficial",
+  description: "Comunidad exclusiva y accesos oficiales.",
 };
 
 export const viewport: Viewport = {
