@@ -43,7 +43,9 @@ export default function PublicGateForm({ config }: Props) {
   const [fullName, setFullName] = useState("");
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [bomboEmail, setBomboEmail] = useState("");
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(() =>
+    config.interests.map((i) => i.id)
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedUrl, setCompletedUrl] = useState<string | null>(null);
@@ -60,6 +62,44 @@ export default function PublicGateForm({ config }: Props) {
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
+
+  const allInterestIds = useMemo(() => config.interests.map((i) => i.id), [config.interests]);
+  const allSelected =
+    allInterestIds.length > 0 && allInterestIds.every((id) => selectedInterests.includes(id));
+
+  const toggleAllInterests = () => {
+    setSelectedInterests(allSelected ? [] : allInterestIds);
+  };
+
+  const toggleCategoryInterests = (catIds: string[]) => {
+    const allCatSelected = catIds.every((id) => selectedInterests.includes(id));
+    if (allCatSelected) {
+      setSelectedInterests((prev) => prev.filter((id) => !catIds.includes(id)));
+    } else {
+      setSelectedInterests((prev) => Array.from(new Set([...prev, ...catIds])));
+    }
+  };
+
+  const groupedInterests = useMemo(() => {
+    const categoryNames: Record<string, string> = {
+      musica: "Música",
+      experiencia: "Experiencia",
+      general: "General",
+    };
+    const groups = new Map<string, typeof config.interests>();
+    for (const item of config.interests) {
+      const cat = item.category || "general";
+      const list = groups.get(cat) || [];
+      list.push(item);
+      groups.set(cat, list);
+    }
+    return Array.from(groups.entries()).map(([key, items]) => ({
+      key,
+      label: categoryNames[key] || key,
+      items,
+      ids: items.map((i) => i.id),
+    }));
+  }, [config.interests]);
 
   const hasValidInviteDestination = (url: string | null): boolean => {
     if (!url) return false;
@@ -296,38 +336,120 @@ export default function PublicGateForm({ config }: Props) {
 
               {/* Configurable Interests Checkboxes */}
               {config.interests.length > 0 && (
-                <div className="pt-1">
-                  <label className="block text-xs font-medium uppercase tracking-wider text-zinc-300 mb-2">
-                    Tus Intereses (Podés elegir varios)
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {config.interests.map((interest) => {
-                      const active = selectedInterests.includes(interest.id);
-                      return (
-                        <button
-                          key={interest.id}
-                          type="button"
-                          onClick={() => toggleInterest(interest.id)}
-                          className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-all ${
-                            active
-                              ? "border-violet-500 bg-violet-500/15 text-white shadow-sm shadow-violet-500/10"
-                              : "border-avora-border bg-avora-bg/60 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
-                          }`}
-                        >
-                          <span className="truncate">{interest.label}</span>
-                          <span
-                            className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 border transition-colors ${
+                <div className="pt-1 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-medium uppercase tracking-wider text-zinc-300">
+                      Tus Intereses ({selectedInterests.length}/{config.interests.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={toggleAllInterests}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-avora-border bg-avora-bg/80 hover:border-violet-500/50 px-2.5 py-1 text-[11px] font-medium text-zinc-300 hover:text-white transition-colors"
+                    >
+                      <span
+                        className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-colors ${
+                          allSelected
+                            ? "border-violet-400 bg-violet-500 text-white"
+                            : "border-zinc-600 bg-zinc-900 text-transparent"
+                        }`}
+                      >
+                        <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                      </span>
+                      <span>{allSelected ? "Quitar todos" : "Marcar todos"}</span>
+                    </button>
+                  </div>
+
+                  {groupedInterests.length > 1 ? (
+                    <div className="space-y-3">
+                      {groupedInterests.map((group) => {
+                        const allCatSelected = group.ids.every((id) =>
+                          selectedInterests.includes(id)
+                        );
+                        return (
+                          <div key={group.key} className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                                {group.label}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleCategoryInterests(group.ids)}
+                                className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-violet-300 transition-colors"
+                              >
+                                <span
+                                  className={`w-3 h-3 rounded-[3px] flex items-center justify-center border transition-colors ${
+                                    allCatSelected
+                                      ? "border-violet-400 bg-violet-500 text-white"
+                                      : "border-zinc-700 bg-zinc-900 text-transparent"
+                                  }`}
+                                >
+                                  <Check className="w-2 h-2" strokeWidth={3} />
+                                </span>
+                                <span>{allCatSelected ? "Quitar" : "Todos"}</span>
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {group.items.map((interest) => {
+                                const active = selectedInterests.includes(interest.id);
+                                return (
+                                  <button
+                                    key={interest.id}
+                                    type="button"
+                                    onClick={() => toggleInterest(interest.id)}
+                                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-all ${
+                                      active
+                                        ? "border-violet-500 bg-violet-500/15 text-white shadow-sm shadow-violet-500/10"
+                                        : "border-avora-border bg-avora-bg/60 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                                    }`}
+                                  >
+                                    <span className="truncate">{interest.label}</span>
+                                    <span
+                                      className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 border transition-colors ${
+                                        active
+                                          ? "border-violet-400 bg-violet-500 text-white"
+                                          : "border-zinc-700 bg-zinc-900/80 text-transparent"
+                                      }`}
+                                    >
+                                      <Check className="w-3 h-3" strokeWidth={3} />
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {config.interests.map((interest) => {
+                        const active = selectedInterests.includes(interest.id);
+                        return (
+                          <button
+                            key={interest.id}
+                            type="button"
+                            onClick={() => toggleInterest(interest.id)}
+                            className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-all ${
                               active
-                                ? "border-violet-400 bg-violet-500 text-white"
-                                : "border-zinc-700 bg-zinc-900/80 text-transparent"
+                                ? "border-violet-500 bg-violet-500/15 text-white shadow-sm shadow-violet-500/10"
+                                : "border-avora-border bg-avora-bg/60 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
                             }`}
                           >
-                            <Check className="w-3 h-3" strokeWidth={3} />
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            <span className="truncate">{interest.label}</span>
+                            <span
+                              className={`w-4 h-4 rounded-md flex items-center justify-center shrink-0 border transition-colors ${
+                                active
+                                  ? "border-violet-400 bg-violet-500 text-white"
+                                  : "border-zinc-700 bg-zinc-900/80 text-transparent"
+                              }`}
+                            >
+                              <Check className="w-3 h-3" strokeWidth={3} />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

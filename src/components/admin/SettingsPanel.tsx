@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Save,
   Plus,
@@ -8,6 +8,8 @@ import {
   ArrowUp,
   ArrowDown,
   Check,
+  Pencil,
+  X,
   Shield,
   Sliders,
   ListChecks,
@@ -35,10 +37,24 @@ export default function SettingsPanel({ settings, interests, admins, onRefresh }
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // Interests CRUD state
+  // Reactive Interests CRUD state
+  const [interestList, setInterestList] = useState<InterestOption[]>(interests);
   const [newInterestLabel, setNewInterestLabel] = useState("");
   const [newInterestCat, setNewInterestCat] = useState("musica");
   const [addingInterest, setAddingInterest] = useState(false);
+  const [interestFeedback, setInterestFeedback] = useState<{ ok: boolean; msg: string } | null>(
+    null
+  );
+  const newInterestInputRef = useRef<HTMLInputElement>(null);
+
+  // Inline editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editCategory, setEditCategory] = useState("musica");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Bulk & row busy state
+  const [bulkUpdating, setBulkUpdating] = useState(false);
 
   // Operator / Staff Provisioning state
   const [opEmail, setOpEmail] = useState("");
@@ -47,10 +63,28 @@ export default function SettingsPanel({ settings, interests, admins, onRefresh }
   const [savingOp, setSavingOp] = useState(false);
   const [opFeedback, setOpFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  useEffect(() => {
+    setInterestList(interests);
+  }, [interests]);
+
   const isPlaceholderWa =
     !whatsappUrl.trim() ||
     whatsappUrl.trim() === "https://chat.whatsapp.com/" ||
     whatsappUrl.includes("ejemplo");
+
+  const refreshInterestsFromDb = async () => {
+    const supabase = createSupabaseBrowserClient();
+    const { data, error } = await supabase
+      .from("interests_avora")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setInterestList(data as InterestOption[]);
+    }
+    onRefresh();
+  };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,52 +118,185 @@ export default function SettingsPanel({ settings, interests, admins, onRefresh }
 
   const handleAddInterest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newInterestLabel.trim()) return;
+    const trimmed = newInterestLabel.trim();
+    if (!trimmed) {
+      setInterestFeedback({
+        ok: false,
+        msg: "Escribí el nombre de la opción arriba antes de tocar Agregar.",
+      });
+      newInterestInputRef.current?.focus();
+      return;
+    }
+
+    setInterestFeedback(null);
     setAddingInterest(true);
     try {
       const supabase = createSupabaseBrowserClient();
       const nextOrder =
-        interests.length > 0 ? Math.max(...interests.map((i) => i.sort_order)) + 1 : 1;
-      await supabase.from("interests_avora").insert({
-        label: newInterestLabel.trim(),
+        interestList.length > 0 ? Math.max(...interestList.map((i) => i.sort_order)) + 1 : 1;
+      const { error } = await supabase.from("interests_avora").insert({
+        label: trimmed,
         category: newInterestCat,
         is_active: true,
         sort_order: nextOrder,
       });
+
+      if (error) {
+        throw new Error(error.message || "No se pudo agregar la opción.");
+      }
+
       setNewInterestLabel("");
-      onRefresh();
+      setInterestFeedback({ ok: true, msg: `Opción "${trimmed}" agregada al formulario.` });
+      await refreshInterestsFromDb();
+    } catch (err) {
+      setInterestFeedback({
+        ok: false,
+        msg: err instanceof Error ? err.message : "Error al agregar la opción.",
+      });
     } finally {
       setAddingInterest(false);
     }
   };
 
+  const startEditInterest = (item: InterestOption) => {
+    setInterestFeedback(null);
+    setEditingId(item.id);
+    setEditLabel(item.label);
+    setEditCategory(item.category || "musica");
+  };
+
+  const cancelEditInterest = () => {
+    setEditingId(null);
+    setEditLabel("");
+  };
+
+  const handleSaveEditInterest = async (itemId: string) => {
+    const trimmed = editLabel.trim();
+    if (!trimmed) {
+      setInterestFeedback({ ok: false, msg: "El nombre de la opción no puede quedar vacío." });
+      return;
+    }
+    setSavingEdit(true);
+    setInterestFeedback(null);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase
+        .from("interests_avora")
+        .update({
+          label: trimmed,
+          category: editCategory,
+        })
+        .eq("id", itemId);
+
+      if (error) {
+        throw new Error(error.message || "No se pudo guardar la edición.");
+      }
+
+      setEditingId(null);
+      setInterestFeedback({ ok: true, msg: `Opción actualizada a "${trimmed}".` });
+      await refreshInterestsFromDb();
+    } catch (err) {
+      setInterestFeedback({
+        ok: false,
+        msg: err instanceof Error ? err.message : "Error al editar la opción.",
+      });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handleToggleInterest = async (item: InterestOption) => {
+    setInterestFeedback(null);
+    const nextActive = item.is_active === false;
+    setInterestList((prev) =>
+      prev.map((row) => (row.id === item.id ? { ...row, is_active: nextActive } : row))
+    );
     const supabase = createSupabaseBrowserClient();
-    await supabase
+    const { error } = await supabase
       .from("interests_avora")
-      .update({ is_active: !item.is_active })
+      .update({ is_active: nextActive })
       .eq("id", item.id);
-    onRefresh();
+
+    if (error) {
+      setInterestFeedback({ ok: false, msg: error.message || "Error al cambiar estado." });
+      await refreshInterestsFromDb();
+      return;
+    }
+    await refreshInterestsFromDb();
+  };
+
+  const allInterestsActive =
+    interestList.length > 0 && interestList.every((item) => item.is_active !== false);
+
+  const handleToggleAllInterests = async () => {
+    if (interestList.length === 0) return;
+    const nextActive = !allInterestsActive;
+    setBulkUpdating(true);
+    setInterestFeedback(null);
+    setInterestList((prev) => prev.map((row) => ({ ...row, is_active: nextActive })));
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const ids = interestList.map((i) => i.id);
+      const { error } = await supabase
+        .from("interests_avora")
+        .update({ is_active: nextActive })
+        .in("id", ids);
+
+      if (error) throw new Error(error.message || "Error al actualizar todos.");
+      setInterestFeedback({
+        ok: true,
+        msg: nextActive
+          ? "Todas las opciones quedaron habilitadas."
+          : "Todas las opciones quedaron deshabilitadas.",
+      });
+      await refreshInterestsFromDb();
+    } catch (err) {
+      setInterestFeedback({
+        ok: false,
+        msg: err instanceof Error ? err.message : "Error al actualizar en lote.",
+      });
+      await refreshInterestsFromDb();
+    } finally {
+      setBulkUpdating(false);
+    }
   };
 
   const handleMoveInterest = async (index: number, direction: -1 | 1) => {
     const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= interests.length) return;
-    const a = interests[index];
-    const b = interests[targetIndex];
+    if (targetIndex < 0 || targetIndex >= interestList.length) return;
+    setInterestFeedback(null);
+
+    const reordered = [...interestList];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    const normalized = reordered.map((item, idx) => ({ ...item, sort_order: idx + 1 }));
+    setInterestList(normalized);
+
     const supabase = createSupabaseBrowserClient();
-    await Promise.all([
-      supabase.from("interests_avora").update({ sort_order: b.sort_order }).eq("id", a.id),
-      supabase.from("interests_avora").update({ sort_order: a.sort_order }).eq("id", b.id),
-    ]);
-    onRefresh();
+    const results = await Promise.all(
+      normalized.map((item) =>
+        supabase.from("interests_avora").update({ sort_order: item.sort_order }).eq("id", item.id)
+      )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      setInterestFeedback({ ok: false, msg: failed.error.message || "Error al reordenar." });
+    }
+    await refreshInterestsFromDb();
   };
 
   const handleDeleteInterest = async (item: InterestOption) => {
     if (!window.confirm(`¿Eliminar la opción "${item.label}" del formulario?`)) return;
+    setInterestFeedback(null);
     const supabase = createSupabaseBrowserClient();
-    await supabase.from("interests_avora").delete().eq("id", item.id);
-    onRefresh();
+    const { error } = await supabase.from("interests_avora").delete().eq("id", item.id);
+    if (error) {
+      setInterestFeedback({ ok: false, msg: error.message || "No se pudo eliminar la opción." });
+      return;
+    }
+    setInterestFeedback({ ok: true, msg: `Opción "${item.label}" eliminada.` });
+    await refreshInterestsFromDb();
   };
 
   const handleSaveOperator = async (e: React.FormEvent) => {
@@ -295,92 +462,211 @@ export default function SettingsPanel({ settings, interests, admins, onRefresh }
       <div className="space-y-6">
         {/* Dynamic Checkboxes Manager */}
         <div className="rounded-2xl border border-avora-border bg-avora-surface p-5 space-y-4">
-          <div className="flex items-center gap-2 border-b border-avora-border pb-3.5">
-            <ListChecks className="w-4 h-4 text-cyan-400" />
-            <div>
-              <h3 className="text-sm font-bold text-white">Checkboxes de Intereses</h3>
-              <p className="text-[11px] text-zinc-400">
-                Personalizá las opciones que eligen los miembros al entrar al grupo
-              </p>
+          <div className="flex items-center justify-between gap-2 border-b border-avora-border pb-3.5">
+            <div className="flex items-center gap-2">
+              <ListChecks className="w-4 h-4 text-cyan-400" />
+              <div>
+                <h3 className="text-sm font-bold text-white">Checkboxes de Intereses</h3>
+                <p className="text-[11px] text-zinc-400">
+                  Agregá, editá, ordená o habilitá las opciones del formulario público
+                </p>
+              </div>
             </div>
+
+            {interestList.length > 0 && (
+              <button
+                type="button"
+                disabled={bulkUpdating}
+                onClick={handleToggleAllInterests}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-avora-border bg-avora-bg hover:border-cyan-500/50 px-2.5 py-1.5 text-[11px] font-medium text-zinc-200 transition-colors shrink-0"
+              >
+                <span
+                  className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${
+                    allInterestsActive
+                      ? "border-violet-400 bg-violet-500 text-white"
+                      : "border-zinc-600 bg-zinc-900 text-transparent"
+                  }`}
+                >
+                  <Check className="w-2.5 h-2.5" strokeWidth={3} />
+                </span>
+                <span>{allInterestsActive ? "Desactivar todos" : "Activar todos"}</span>
+              </button>
+            )}
           </div>
 
-          <form onSubmit={handleAddInterest} className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              placeholder="Ej: Progressive / Mesas VIP / Afters..."
-              value={newInterestLabel}
-              onChange={(e) => setNewInterestLabel(e.target.value)}
-              className="flex-1 rounded-xl border border-avora-border bg-avora-bg px-3.5 py-2 text-xs text-white focus:border-violet-500 focus:outline-none"
-            />
-            <select
-              value={newInterestCat}
-              onChange={(e) => setNewInterestCat(e.target.value)}
-              className="rounded-xl border border-avora-border bg-avora-bg px-3 py-2 text-xs text-zinc-200"
+          {interestFeedback && (
+            <div
+              className={`rounded-xl border px-3 py-2 text-xs ${
+                interestFeedback.ok
+                  ? "border-emerald-500/40 bg-emerald-950/25 text-emerald-200"
+                  : "border-red-500/40 bg-red-950/25 text-red-200"
+              }`}
             >
-              <option value="musica">Música</option>
-              <option value="experiencia">Experiencia</option>
-              <option value="general">General</option>
-            </select>
-            <button
-              type="submit"
-              disabled={addingInterest || !newInterestLabel.trim()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 px-3.5 py-2 text-xs font-semibold text-white"
+              {interestFeedback.msg}
+            </div>
+          )}
+
+          <form onSubmit={handleAddInterest} className="space-y-1.5">
+            <label
+              htmlFor="newInterestInput"
+              className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-300"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Agregar</span>
-            </button>
+              Nueva opción de interés
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                ref={newInterestInputRef}
+                id="newInterestInput"
+                type="text"
+                placeholder="Ej: Progressive / Mesas VIP / Afters..."
+                value={newInterestLabel}
+                onChange={(e) => setNewInterestLabel(e.target.value)}
+                className="flex-1 rounded-xl border border-avora-border bg-avora-bg px-3.5 py-2 text-xs text-white focus:border-violet-500 focus:outline-none"
+              />
+              <select
+                value={newInterestCat}
+                onChange={(e) => setNewInterestCat(e.target.value)}
+                className="rounded-xl border border-avora-border bg-avora-bg px-3 py-2 text-xs text-zinc-200"
+              >
+                <option value="musica">Música</option>
+                <option value="experiencia">Experiencia</option>
+                <option value="general">General</option>
+              </select>
+              <button
+                type="submit"
+                disabled={addingInterest}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 px-3.5 py-2 text-xs font-semibold text-white transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{addingInterest ? "Agregando..." : "Agregar"}</span>
+              </button>
+            </div>
           </form>
 
-          <div className="divide-y divide-avora-border/60 max-h-64 overflow-y-auto">
-            {interests.map((item, idx) => (
-              <div key={item.id} className="py-2.5 flex items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <input
-                    type="checkbox"
-                    checked={item.is_active !== false}
-                    onChange={() => handleToggleInterest(item)}
-                    className="rounded border-zinc-700 bg-zinc-900 text-violet-600"
-                  />
-                  <span
-                    className={`truncate ${
-                      item.is_active !== false ? "text-zinc-100 font-medium" : "text-zinc-500 line-through"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wider text-zinc-500 px-1.5 py-0.5 rounded bg-avora-bg border border-avora-border">
-                    {item.category}
-                  </span>
-                </div>
+          <div className="divide-y divide-avora-border/60 max-h-72 overflow-y-auto">
+            {interestList.length === 0 ? (
+              <p className="py-6 text-center text-xs text-zinc-500">
+                No hay opciones creadas. Agregá la primera arriba.
+              </p>
+            ) : (
+              interestList.map((item, idx) => {
+                const isEditing = editingId === item.id;
+                return (
+                  <div key={item.id} className="py-2.5 flex items-center justify-between gap-2 text-xs">
+                    {isEditing ? (
+                      <div className="flex flex-1 flex-wrap sm:flex-nowrap items-center gap-2">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editLabel}
+                          onChange={(e) => setEditLabel(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleSaveEditInterest(item.id);
+                            } else if (e.key === "Escape") {
+                              cancelEditInterest();
+                            }
+                          }}
+                          className="flex-1 min-w-[140px] rounded-lg border border-violet-500 bg-avora-bg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                        />
+                        <select
+                          value={editCategory}
+                          onChange={(e) => setEditCategory(e.target.value)}
+                          className="rounded-lg border border-avora-border bg-avora-bg px-2 py-1.5 text-xs text-zinc-200"
+                        >
+                          <option value="musica">Música</option>
+                          <option value="experiencia">Experiencia</option>
+                          <option value="general">General</option>
+                        </select>
+                        <div className="inline-flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={savingEdit}
+                            onClick={() => handleSaveEditInterest(item.id)}
+                            title="Guardar cambios"
+                            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 p-1.5 text-white"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditInterest}
+                            title="Cancelar"
+                            className="rounded-lg border border-avora-border bg-avora-bg hover:bg-zinc-800 p-1.5 text-zinc-400"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={item.is_active !== false}
+                            onChange={() => handleToggleInterest(item)}
+                            className="rounded border-zinc-700 bg-zinc-900 text-violet-600 cursor-pointer"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => startEditInterest(item)}
+                            title="Clic para editar nombre o categoría"
+                            className={`truncate text-left hover:text-violet-300 transition-colors ${
+                              item.is_active !== false
+                                ? "text-zinc-100 font-medium"
+                                : "text-zinc-500 line-through"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                          <span className="text-[10px] uppercase tracking-wider text-zinc-500 px-1.5 py-0.5 rounded bg-avora-bg border border-avora-border shrink-0">
+                            {item.category}
+                          </span>
+                        </div>
 
-                <div className="inline-flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    disabled={idx === 0}
-                    onClick={() => handleMoveInterest(idx, -1)}
-                    className="rounded p-1 text-zinc-400 hover:bg-zinc-800 disabled:opacity-25"
-                  >
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={idx === interests.length - 1}
-                    onClick={() => handleMoveInterest(idx, 1)}
-                    className="rounded p-1 text-zinc-400 hover:bg-zinc-800 disabled:opacity-25"
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteInterest(item)}
-                    className="rounded p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-800"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+                        <div className="inline-flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEditInterest(item)}
+                            title="Editar opción"
+                            className="rounded p-1 text-zinc-400 hover:text-violet-300 hover:bg-zinc-800"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === 0}
+                            onClick={() => handleMoveInterest(idx, -1)}
+                            title="Subir"
+                            className="rounded p-1 text-zinc-400 hover:bg-zinc-800 disabled:opacity-25"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx === interestList.length - 1}
+                            onClick={() => handleMoveInterest(idx, 1)}
+                            title="Bajar"
+                            className="rounded p-1 text-zinc-400 hover:bg-zinc-800 disabled:opacity-25"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInterest(item)}
+                            title="Eliminar"
+                            className="rounded p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-800"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
