@@ -4,12 +4,14 @@ import React from "react";
 import { X, Globe, Smartphone, Clock, Cpu, Link2 } from "lucide-react";
 import type { ClickAvora, MemberAvora } from "@/types/avora";
 import { formatArDateTimeShort, formatArFullDateTime } from "@/lib/datetime";
+import { formatLocationLabel } from "@/lib/geo-labels";
 
 interface Props {
   title: string;
   subtitle?: string;
   data: MemberAvora | ClickAvora | null;
   memberClicks?: ClickAvora[];
+  presentationMode?: boolean;
   onClose: () => void;
 }
 
@@ -18,6 +20,7 @@ export default function TelemetryModal({
   subtitle,
   data,
   memberClicks,
+  presentationMode = false,
   onClose,
 }: Props) {
   if (!data) return null;
@@ -25,8 +28,12 @@ export default function TelemetryModal({
   const isMember = "full_name" in data;
   const timestamp = isMember ? data.created_at : data.clicked_at;
 
-  const locationParts = [data.city, data.region, data.country].filter(Boolean);
-  const locationText = locationParts.length > 0 ? locationParts.join(", ") : "Sin datos de ciudad";
+  const locationText = formatLocationLabel(
+    data.city,
+    data.region,
+    data.country,
+    "Sin datos de ciudad"
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
@@ -58,7 +65,10 @@ export default function TelemetryModal({
               </div>
               <p className="text-zinc-200 font-medium">{locationText}</p>
               <p className="text-zinc-400">
-                IP: <span className="font-mono text-zinc-200">{data.ip_address || "N/D"}</span>
+                IP:{" "}
+                <span className="font-mono text-zinc-200">
+                  {presentationMode ? "•••.•••.•••" : data.ip_address || "N/D"}
+                </span>
               </p>
               <p className="text-zinc-400">
                 Proveedor / ISP: <span className="text-zinc-200">{data.isp || "No reportado"}</span>
@@ -150,7 +160,9 @@ export default function TelemetryModal({
                           {c.links_avora?.title || "Link de Evento"}
                         </p>
                         <p className="text-[11px] text-zinc-500">
-                          /{c.links_avora?.slug} • {c.city || "Ubicación N/D"} • {c.os || "Dispositivo"}
+                          /{c.links_avora?.slug} •{" "}
+                          {formatLocationLabel(c.city, c.region, c.country, "Ubicación N/D")} •{" "}
+                          {c.os || "Dispositivo"}
                         </p>
                       </div>
                       <span className="text-[11px] font-mono text-zinc-400 shrink-0">

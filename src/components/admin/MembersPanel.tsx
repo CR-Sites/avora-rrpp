@@ -11,11 +11,13 @@ import {
   Sparkles,
   Trash2,
   Mail,
+  Flame,
 } from "lucide-react";
 import type { ClickAvora, InterestOption, MemberAvora } from "@/types/avora";
 import { buildWaMeUrl } from "@/lib/telemetry";
 import { downloadCsv } from "@/lib/csv";
 import { formatArDateTimeShort, formatArFullDateTime } from "@/lib/datetime";
+import { formatLocationLabel, maskEmail, maskName, maskPhone } from "@/lib/geo-labels";
 import { WhatsAppSvg } from "@/components/AvoraIcons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import TelemetryModal from "./TelemetryModal";
@@ -25,13 +27,22 @@ interface Props {
   interests: InterestOption[];
   clicks: ClickAvora[];
   renderedAt: string;
+  presentationMode?: boolean;
   onRefresh: () => void;
 }
 
-export default function MembersPanel({ members, interests, clicks, renderedAt, onRefresh }: Props) {
+export default function MembersPanel({
+  members,
+  interests,
+  clicks,
+  renderedAt,
+  presentationMode = false,
+  onRefresh,
+}: Props) {
   const [search, setSearch] = useState("");
   const [interestFilter, setInterestFilter] = useState<string>("all");
   const [onlyWithClicks, setOnlyWithClicks] = useState(false);
+  const [hotOnly, setHotOnly] = useState(false);
   const [inspectingMember, setInspectingMember] = useState<MemberAvora | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -50,7 +61,9 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
     return members.filter((m) => {
-      if (onlyWithClicks && !(clicksByMember.get(m.id)?.length)) return false;
+      const mClickCount = clicksByMember.get(m.id)?.length || 0;
+      if (onlyWithClicks && mClickCount === 0) return false;
+      if (hotOnly && mClickCount < 2) return false;
       if (
         interestFilter !== "all" &&
         !m.interest_ids.includes(interestFilter) &&
@@ -63,11 +76,11 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
         m.full_name.toLowerCase().includes(q) ||
         m.whatsapp_phone.toLowerCase().includes(q) ||
         m.bombo_email.toLowerCase().includes(q) ||
-        (m.city || "").toLowerCase().includes(q) ||
+        formatLocationLabel(m.city, m.region, m.country, "").toLowerCase().includes(q) ||
         m.interest_labels.some((lbl) => lbl.toLowerCase().includes(q))
       );
     });
-  }, [members, search, interestFilter, onlyWithClicks, clicksByMember]);
+  }, [members, search, interestFilter, onlyWithClicks, hotOnly, clicksByMember]);
 
   // Quick KPIs
   const stats = useMemo(() => {
@@ -82,7 +95,7 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
 
     for (const m of members) {
       if (m.device_type === "mobile") mobileCount++;
-      const city = m.city || m.country || "Sin ciudad";
+      const city = formatLocationLabel(m.city, m.region, m.country, "Sin ciudad");
       cityCounts.set(city, (cityCounts.get(city) || 0) + 1);
       for (const lbl of m.interest_labels) {
         interestCounts.set(lbl, (interestCounts.get(lbl) || 0) + 1);
@@ -239,6 +252,19 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
           >
             Con clics en compra
           </button>
+
+          <button
+            type="button"
+            onClick={() => setHotOnly((v) => !v)}
+            className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+              hotOnly
+                ? "border-amber-500/60 bg-amber-500/15 text-amber-200"
+                : "border-avora-border bg-avora-bg text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-400" />
+            <span>Intención Alta (2+)</span>
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -288,28 +314,50 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
               <tbody className="divide-y divide-avora-border/60 text-xs">
                 {filteredMembers.map((member) => {
                   const mClicks = clicksByMember.get(member.id) || [];
-                  const locationStr = [member.city, member.region].filter(Boolean).join(", ") || member.country || "N/D";
+                  const isHotLead = mClicks.length >= 2;
+                  const locationStr = formatLocationLabel(
+                    member.city,
+                    member.region,
+                    member.country,
+                    "N/D"
+                  );
+                  const displayName = presentationMode
+                    ? maskName(member.full_name)
+                    : member.full_name;
+                  const displayPhone = presentationMode
+                    ? maskPhone(member.whatsapp_phone)
+                    : member.whatsapp_phone;
+                  const displayEmail = presentationMode
+                    ? maskEmail(member.bombo_email)
+                    : member.bombo_email || "Sin mail";
                   return (
                     <tr key={member.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-3.5 px-4">
-                        <p className="font-semibold text-white">{member.full_name}</p>
+                        <p className="font-semibold text-white">{displayName}</p>
                         <p className="text-[11px] text-zinc-500 mt-0.5">
                           Ingreso: {formatArDateTimeShort(member.created_at)}
                         </p>
                       </td>
 
                       <td className="py-3.5 px-4 space-y-1">
-                        <a
-                          href={buildWaMeUrl(member.whatsapp_phone)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 font-mono text-emerald-400 hover:text-emerald-300 transition-colors"
-                        >
-                          <WhatsAppSvg className="w-3.5 h-3.5" />
-                          <span>{member.whatsapp_phone}</span>
-                        </a>
-                        <p className="text-zinc-300 truncate max-w-[210px]" title={member.bombo_email}>
-                          {member.bombo_email || "Sin mail"}
+                        {presentationMode ? (
+                          <span className="inline-flex items-center gap-1.5 font-mono text-zinc-400">
+                            <WhatsAppSvg className="w-3.5 h-3.5" />
+                            <span>{displayPhone}</span>
+                          </span>
+                        ) : (
+                          <a
+                            href={buildWaMeUrl(member.whatsapp_phone)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 font-mono text-emerald-400 hover:text-emerald-300 transition-colors"
+                          >
+                            <WhatsAppSvg className="w-3.5 h-3.5" />
+                            <span>{displayPhone}</span>
+                          </a>
+                        )}
+                        <p className="text-zinc-300 truncate max-w-[210px]" title={displayEmail}>
+                          {displayEmail}
                         </p>
                       </td>
 
@@ -339,9 +387,14 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
                       </td>
 
                       <td className="py-3.5 px-4">
-                        {mClicks.length > 0 ? (
+                        {isHotLead ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/40 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">
+                            <Flame className="w-3 h-3 text-amber-400" />
+                            <span>{mClicks.length} clics • Alta intención</span>
+                          </span>
+                        ) : mClicks.length > 0 ? (
                           <span className="inline-flex items-center rounded-full bg-cyan-500/15 border border-cyan-500/30 px-2.5 py-0.5 text-[11px] font-medium text-cyan-300">
-                            {mClicks.length} {mClicks.length === 1 ? "clic compra" : "clics compra"}
+                            {mClicks.length} clic compra
                           </span>
                         ) : (
                           <span className="text-[11px] text-zinc-600">Sin rebotes aún</span>
@@ -350,18 +403,20 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="inline-flex items-center gap-1.5">
-                          <a
-                            href={buildWaMeUrl(
-                              member.whatsapp_phone,
-                              `Hola ${member.full_name.split(" ")[0]}, te escribo del grupo oficial de eventos.`
-                            )}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Abrir chat de WhatsApp"
-                            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 p-1.5 text-emerald-400 transition-colors"
-                          >
-                            <WhatsAppSvg className="w-3.5 h-3.5" />
-                          </a>
+                          {!presentationMode && (
+                            <a
+                              href={buildWaMeUrl(
+                                member.whatsapp_phone,
+                                `Hola ${member.full_name.split(" ")[0]}, te escribo del grupo oficial de eventos.`
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir chat de WhatsApp"
+                              className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 p-1.5 text-emerald-400 transition-colors"
+                            >
+                              <WhatsAppSvg className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                           <button
                             type="button"
                             onClick={() => setInspectingMember(member)}
@@ -391,14 +446,29 @@ export default function MembersPanel({ members, interests, clicks, renderedAt, o
       </div>
 
       <TelemetryModal
-        title={inspectingMember ? inspectingMember.full_name : ""}
+        title={
+          inspectingMember
+            ? presentationMode
+              ? maskName(inspectingMember.full_name)
+              : inspectingMember.full_name
+            : ""
+        }
         subtitle={
           inspectingMember
-            ? `${inspectingMember.whatsapp_phone} • Bombo: ${inspectingMember.bombo_email}`
+            ? `${
+                presentationMode
+                  ? maskPhone(inspectingMember.whatsapp_phone)
+                  : inspectingMember.whatsapp_phone
+              } • Bombo: ${
+                presentationMode
+                  ? maskEmail(inspectingMember.bombo_email)
+                  : inspectingMember.bombo_email
+              }`
             : undefined
         }
         data={inspectingMember}
         memberClicks={inspectingMember ? clicksByMember.get(inspectingMember.id) || [] : []}
+        presentationMode={presentationMode}
         onClose={() => setInspectingMember(null)}
       />
     </div>

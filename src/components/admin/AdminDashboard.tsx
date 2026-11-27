@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   Users,
   Link2,
@@ -12,6 +13,9 @@ import {
   Copy,
   Check,
   ExternalLink,
+  MapPin,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import type {
   AdminAvora,
@@ -27,6 +31,15 @@ import MembersPanel from "./MembersPanel";
 import LinksPanel from "./LinksPanel";
 import SettingsPanel from "./SettingsPanel";
 
+const LiveMapPanel = dynamic(() => import("./LiveMapPanel"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-2xl border border-avora-border bg-avora-surface h-[540px] flex items-center justify-center text-xs text-zinc-400">
+      Cargando mapa interactivo...
+    </div>
+  ),
+});
+
 interface Props {
   userEmail: string;
   renderedAt: string;
@@ -38,7 +51,7 @@ interface Props {
   admins: AdminAvora[];
 }
 
-type ActiveTab = "members" | "links" | "settings";
+type ActiveTab = "members" | "links" | "map" | "settings";
 
 export default function AdminDashboard({
   userEmail,
@@ -52,6 +65,7 @@ export default function AdminDashboard({
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>("members");
+  const [presentationMode, setPresentationMode] = useState(false);
   const [copiedGate, setCopiedGate] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -79,6 +93,9 @@ export default function AdminDashboard({
   };
 
   const humanClicksCount = clicks.filter((c) => !c.is_bot).length;
+  const geolocatedCount =
+    members.filter((m) => m.latitude !== null && m.longitude !== null).length +
+    clicks.filter((c) => !c.is_bot && c.latitude !== null && c.longitude !== null).length;
 
   return (
     <div className="min-h-screen bg-avora-bg text-zinc-100 flex flex-col">
@@ -103,6 +120,18 @@ export default function AdminDashboard({
             </div>
 
             <div className="flex items-center gap-1.5 md:hidden">
+              <button
+                type="button"
+                onClick={() => setPresentationMode((v) => !v)}
+                className={`rounded-lg border p-2 transition-colors ${
+                  presentationMode
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
+                    : "border-avora-border bg-avora-bg text-zinc-300"
+                }`}
+                aria-label="Modo Reunión"
+              >
+                {presentationMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
               <button
                 type="button"
                 onClick={handleRefresh}
@@ -166,6 +195,26 @@ export default function AdminDashboard({
 
             <button
               type="button"
+              onClick={() => setActiveTab("map")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
+                activeTab === "map"
+                  ? "bg-violet-600 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Mapa en Vivo</span>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
+                  activeTab === "map" ? "bg-white/20 text-white" : "bg-zinc-800 text-zinc-400"
+                }`}
+              >
+                {geolocatedCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab("settings")}
               className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
                 activeTab === "settings"
@@ -180,6 +229,29 @@ export default function AdminDashboard({
 
           {/* Right Quick Actions */}
           <div className="hidden md:flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPresentationMode((v) => !v)}
+              title="Ocultar teléfonos, mails e IPs para proyectar en reunión"
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+                presentationMode
+                  ? "border-amber-500/50 bg-amber-500/15 text-amber-200"
+                  : "border-avora-border bg-avora-bg hover:bg-zinc-900 text-zinc-300"
+              }`}
+            >
+              {presentationMode ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Modo Reunión</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Datos Visibles</span>
+                </>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={handleCopyGateLink}
@@ -236,12 +308,28 @@ export default function AdminDashboard({
             interests={interests}
             clicks={clicks}
             renderedAt={renderedAt}
+            presentationMode={presentationMode}
             onRefresh={handleRefresh}
           />
         )}
 
         {activeTab === "links" && (
-          <LinksPanel links={links} clicks={clicks} onRefresh={handleRefresh} />
+          <LinksPanel
+            links={links}
+            clicks={clicks}
+            presentationMode={presentationMode}
+            onRefresh={handleRefresh}
+          />
+        )}
+
+        {activeTab === "map" && (
+          <LiveMapPanel
+            members={members}
+            clicks={clicks}
+            interests={interests}
+            links={links}
+            presentationMode={presentationMode}
+          />
         )}
 
         {activeTab === "settings" && (

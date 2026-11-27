@@ -28,12 +28,14 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { buildWaMeUrl } from "@/lib/telemetry";
 import { downloadCsv } from "@/lib/csv";
 import { formatArClickTime, formatArFullDateTime, getArHour } from "@/lib/datetime";
+import { formatLocationLabel, maskEmail, maskName } from "@/lib/geo-labels";
 import { WhatsAppSvg } from "@/components/AvoraIcons";
 import TelemetryModal from "./TelemetryModal";
 
 interface Props {
   links: LinkAvora[];
   clicks: ClickAvora[];
+  presentationMode?: boolean;
   onRefresh: () => void;
 }
 
@@ -47,7 +49,12 @@ function slugifyText(input: string): string {
     .slice(0, 48);
 }
 
-export default function LinksPanel({ links, clicks, onRefresh }: Props) {
+export default function LinksPanel({
+  links,
+  clicks,
+  presentationMode = false,
+  onRefresh,
+}: Props) {
   // "all" = Vista General de todos los links | link.id = Vista Individual
   const [selectedLinkId, setSelectedLinkId] = useState<string>("all");
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
@@ -137,7 +144,7 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
       const hr = getArHour(c.clicked_at);
       if (hr >= 0 && hr < 24) hours[hr]++;
 
-      const cityLabel = [c.city, c.region].filter(Boolean).join(", ") || c.country || "No detectada";
+      const cityLabel = formatLocationLabel(c.city, c.region, c.country, "No detectada");
       cityMap.set(cityLabel, (cityMap.get(cityLabel) || 0) + 1);
 
       const osLabel = c.os || "Otro";
@@ -843,8 +850,7 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
               <tbody className="divide-y divide-avora-border/60 text-xs">
                 {visibleClicks.slice(0, 200).map((click) => {
                   const m = click.members_avora;
-                  const loc =
-                    [click.city, click.region].filter(Boolean).join(", ") || click.country || "N/D";
+                  const loc = formatLocationLabel(click.city, click.region, click.country, "N/D");
                   return (
                     <tr key={click.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-3 px-4 font-mono text-[11px] text-zinc-300 whitespace-nowrap">
@@ -872,18 +878,24 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
                         ) : m ? (
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-semibold text-emerald-300">{m.full_name}</span>
-                              <a
-                                href={buildWaMeUrl(m.whatsapp_phone)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                title="Hablar por WhatsApp"
-                                className="text-emerald-400 hover:text-emerald-300"
-                              >
-                                <WhatsAppSvg className="w-3.5 h-3.5" />
-                              </a>
+                              <span className="font-semibold text-emerald-300">
+                                {presentationMode ? maskName(m.full_name) : m.full_name}
+                              </span>
+                              {!presentationMode && (
+                                <a
+                                  href={buildWaMeUrl(m.whatsapp_phone)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Hablar por WhatsApp"
+                                  className="text-emerald-400 hover:text-emerald-300"
+                                >
+                                  <WhatsAppSvg className="w-3.5 h-3.5" />
+                                </a>
+                              )}
                             </div>
-                            <p className="text-[11px] text-zinc-400">{m.bombo_email}</p>
+                            <p className="text-[11px] text-zinc-400">
+                              {presentationMode ? maskEmail(m.bombo_email) : m.bombo_email}
+                            </p>
                           </div>
                         ) : (
                           <div>
@@ -1095,8 +1107,13 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
 
       <TelemetryModal
         title={
-          inspectingClick?.members_avora?.full_name ||
-          (inspectingClick?.is_bot ? inspectingClick.bot_name || "Bot Preview" : "Sesión de Rebote")
+          inspectingClick?.members_avora?.full_name
+            ? presentationMode
+              ? maskName(inspectingClick.members_avora.full_name)
+              : inspectingClick.members_avora.full_name
+            : inspectingClick?.is_bot
+            ? inspectingClick.bot_name || "Bot Preview"
+            : "Sesión de Rebote"
         }
         subtitle={
           inspectingClick
@@ -1106,6 +1123,7 @@ export default function LinksPanel({ links, clicks, onRefresh }: Props) {
             : undefined
         }
         data={inspectingClick}
+        presentationMode={presentationMode}
         onClose={() => setInspectingClick(null)}
       />
     </div>
