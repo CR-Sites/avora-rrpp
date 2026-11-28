@@ -8,12 +8,36 @@ import {
   Calendar,
   CheckCircle2,
   Lock,
+  ShieldCheck,
   Sparkles,
   UserCheck,
 } from "lucide-react";
 import type { GuestlistCategory, PublicGuestlistConfig } from "@/types/avora";
 import { formatArDateOnly } from "@/lib/datetime";
+import { AVORA_ANON_COOKIE, AVORA_COOKIE_MAX_AGE } from "@/lib/cookies";
 import { SonicPulseSvg, WhatsAppSvg } from "./AvoraIcons";
+
+function getOrCreateAnonCookie(): string {
+  if (typeof document === "undefined") return "";
+  const match = document.cookie.match(new RegExp(`(?:^|; )${AVORA_ANON_COOKIE}=([^;]*)`));
+  if (match && match[1]) return decodeURIComponent(match[1]);
+  const generated =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  document.cookie = `${AVORA_ANON_COOKIE}=${encodeURIComponent(generated)}; path=/; max-age=${AVORA_COOKIE_MAX_AGE}; SameSite=Lax`;
+  return generated;
+}
+
+function hasValidInviteDestination(url: string | null): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith("http")) return false;
+  if (trimmed === "https://chat.whatsapp.com/" || trimmed === "https://chat.whatsapp.com") {
+    return false;
+  }
+  return true;
+}
 
 interface Props {
   config: PublicGuestlistConfig;
@@ -52,7 +76,20 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
     dniClean: string;
     fullName: string;
     instagramHandle: string;
+    bomboEmail: string;
+    whatsappPhone: string;
+    isGroupMember: boolean;
+    canJoinGroup: boolean;
   } | null>(null);
+
+  // Post-guestlist WhatsApp Group opt-in states
+  const [declinedGroup, setDeclinedGroup] = useState(false);
+  const [needPhoneStep, setNeedPhoneStep] = useState(false);
+  const [joinPhoneInput, setJoinPhoneInput] = useState("");
+  const [joiningGroup, setJoiningGroup] = useState(false);
+  const [joinGroupError, setJoinGroupError] = useState<string | null>(null);
+  const [joinedGroupUrl, setJoinedGroupUrl] = useState<string | null>(null);
+  const [joinedGroupDone, setJoinedGroupDone] = useState(false);
 
   const cleanDniPreview = useMemo(() => dni.replace(/\D/g, ""), [dni]);
   const cleanIgPreview = useMemo(() => {
@@ -113,12 +150,111 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
         dniClean: cleanDniPreview,
         fullName: `${firstName.trim()} ${lastName.trim()}`,
         instagramHandle: cleanIgPreview,
+        bomboEmail: bomboEmail.trim().toLowerCase(),
+        whatsappPhone: whatsappPhone.trim(),
+        isGroupMember: Boolean(data.is_group_member),
+        canJoinGroup: Boolean(data.can_join_group),
       });
+      setJoinPhoneInput(whatsappPhone.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado al enviar.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const executeJoinGroup = async (phoneToUse: string) => {
+    if (!confirmation) return;
+    setJoinGroupError(null);
+    setJoiningGroup(true);
+
+    try {
+      const nav = navigator as Navigator & {
+        connection?: { effectiveType?: string; downlink?: number; rtt?: number };
+        deviceMemory?: number;
+      };
+      const params = new URLSearchParams(window.location.search);
+      const anonId = getOrCreateAnonCookie();
+      let storedVid: string | undefined;
+      try {
+        storedVid = window.localStorage.getItem("avora_vid") || undefined;
+      } catch {
+        storedVid = undefined;
+      }
+
+      const res = await fetch("/api/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: confirmation.fullName,
+          whatsapp_phone: phoneToUse,
+          bombo_email: confirmation.bomboEmail,
+          instagram_handle: confirmation.instagramHandle,
+          interest_ids: [],
+          anon_visitor_id: anonId,
+          visitor_token: storedVid,
+          telemetry: {
+            screen_resolution: `${window.screen.width}x${window.screen.height}`,
+            viewport_size: `${window.innerWidth}x${window.innerHeight}`,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            language: navigator.language,
+            connection_type: nav.connection?.effectiveType || undefined,
+            platform: navigator.platform || undefined,
+            referrer: document.referrer || undefined,
+            utm_source: params.get("utm_source") || undefined,
+            utm_medium: params.get("utm_medium") || undefined,
+            utm_campaign: params.get("utm_campaign") || undefined,
+            extra: {
+              source_flow: "guestlist_opt_in",
+              guestlist_slug: config.slug,
+              entry_url: window.location.href,
+              client_timestamp: new Date().toISOString(),
+            },
+          },
+        }),
+      });
+
+      const joinData = await res.json();
+      if (!res.ok || !joinData.ok) {
+        throw new Error(joinData.error || "No pudimos procesar tu acceso al grupo.");
+      }
+
+      if (joinData.visitor_token) {
+        try {
+          window.localStorage.setItem("avora_vid", joinData.visitor_token);
+        } catch {
+          // Ignore storage restrictions
+        }
+      }
+
+      setJoinedGroupUrl(joinData.whatsapp_invite_url || null);
+      setJoinedGroupDone(true);
+
+      if (hasValidInviteDestination(joinData.whatsapp_invite_url)) {
+        setTimeout(() => {
+          window.location.href = joinData.whatsapp_invite_url;
+        }, 900);
+      }
+    } catch (err) {
+      setJoinGroupError(err instanceof Error ? err.message : "Error al unirte al grupo.");
+    } finally {
+      setJoiningGroup(false);
+    }
+  };
+
+  const handleAcceptJoinGroup = () => {
+    if (!confirmation) return;
+    const digits = confirmation.whatsappPhone.replace(/\D/g, "");
+    if (digits.length >= 8) {
+      void executeJoinGroup(confirmation.whatsappPhone);
+    } else {
+      setNeedPhoneStep(true);
+    }
+  };
+
+  const handleSubmitJoinPhone = (e: React.FormEvent) => {
+    e.preventDefault();
+    void executeJoinGroup(joinPhoneInput);
   };
 
   return (
@@ -211,15 +347,114 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
                 </div>
               </div>
 
-              {!config.prefill && (
-                <Link
-                  href="/unirse"
-                  className="inline-flex items-center justify-center gap-2 w-full rounded-xl border border-avora-border bg-avora-bg hover:border-violet-500/50 text-zinc-200 font-medium py-3 px-4 text-xs transition-colors"
-                >
-                  <WhatsAppSvg className="w-4 h-4 text-emerald-400" />
-                  <span>¿Todavía no estás en el grupo VIP? Entrá acá</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+              {!confirmation.isGroupMember && confirmation.canJoinGroup && !declinedGroup && (
+                <div className="rounded-xl border border-emerald-500/35 bg-emerald-950/20 p-4 text-left space-y-3">
+                  {joinedGroupDone ? (
+                    <div className="space-y-3 text-center">
+                      <div className="inline-flex items-center gap-2 text-emerald-300 text-xs font-semibold">
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>
+                          {hasValidInviteDestination(joinedGroupUrl)
+                            ? "Acceso al grupo habilitado. Redirigiendo a WhatsApp..."
+                            : "Tus datos quedaron sumados al grupo oficial."}
+                        </span>
+                      </div>
+                      {hasValidInviteDestination(joinedGroupUrl) && (
+                        <a
+                          href={joinedGroupUrl!}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold py-3 px-4 text-xs transition-colors"
+                        >
+                          <WhatsAppSvg className="w-4 h-4" />
+                          <span>Abrir Grupo de WhatsApp</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  ) : needPhoneStep ? (
+                    <form onSubmit={handleSubmitJoinPhone} className="space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-white">
+                          Ingresá tu número de WhatsApp para enviarte el acceso al grupo
+                        </p>
+                        <p className="text-[11px] text-zinc-400">
+                          Ya usamos tu nombre, mail de Bombo e Instagram cargados recién.
+                        </p>
+                      </div>
+
+                      {joinGroupError && (
+                        <p className="text-[11px] text-red-300 bg-red-950/40 border border-red-500/30 rounded-lg px-2.5 py-1.5">
+                          {joinGroupError}
+                        </p>
+                      )}
+
+                      <input
+                        type="tel"
+                        inputMode="tel"
+                        required
+                        autoFocus
+                        placeholder="Ej: 11 2345 6789"
+                        value={joinPhoneInput}
+                        onChange={(e) => setJoinPhoneInput(e.target.value)}
+                        className="w-full rounded-xl border border-avora-border bg-avora-bg px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none"
+                      />
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={joiningGroup}
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-zinc-950 font-semibold py-2.5 px-3 text-xs transition-colors"
+                        >
+                          <WhatsAppSvg className="w-4 h-4" />
+                          <span>{joiningGroup ? "Habilitando..." : "Entrar al Grupo Ahora"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeclinedGroup(true)}
+                          className="rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 px-3 py-2.5 text-xs text-zinc-400"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-white">
+                          ¿Querés acceder al Grupo Oficial de WhatsApp?
+                        </p>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          Enterate antes que nadie de próximas fechas, listas free y preventas exclusivas.
+                        </p>
+                      </div>
+
+                      {joinGroupError && (
+                        <p className="text-[11px] text-red-300 bg-red-950/40 border border-red-500/30 rounded-lg px-2.5 py-1.5">
+                          {joinGroupError}
+                        </p>
+                      )}
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          disabled={joiningGroup}
+                          onClick={handleAcceptJoinGroup}
+                          className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-zinc-950 font-semibold py-2.5 px-3.5 text-xs transition-colors"
+                        >
+                          <WhatsAppSvg className="w-4 h-4" />
+                          <span>{joiningGroup ? "Conectando..." : "Sí, quiero entrar al grupo"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={joiningGroup}
+                          onClick={() => setDeclinedGroup(true)}
+                          className="rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 px-3.5 py-2.5 text-xs font-medium text-zinc-300 transition-colors"
+                        >
+                          No, gracias
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           ) : (
