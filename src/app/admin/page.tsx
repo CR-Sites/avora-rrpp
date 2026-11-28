@@ -6,6 +6,8 @@ import AdminDashboard from "@/components/admin/AdminDashboard";
 import type {
   AdminAvora,
   ClickAvora,
+  GuestlistAvora,
+  GuestlistEntryAvora,
   InterestOption,
   LinkAvora,
   MemberAvora,
@@ -68,7 +70,16 @@ export default async function AdminPage() {
     );
   }
 
-  const [settingsRes, interestsRes, membersRes, linksRes, clicksRes, adminsRes] = await Promise.all([
+  const [
+    settingsRes,
+    interestsRes,
+    membersRes,
+    linksRes,
+    clicksRes,
+    adminsRes,
+    guestlistsRes,
+    guestlistEntriesRes,
+  ] = await Promise.all([
     supabase.from("settings_avora").select("*").eq("id", 1).maybeSingle(),
     supabase
       .from("interests_avora")
@@ -105,6 +116,16 @@ export default async function AdminPage() {
       .order("clicked_at", { ascending: false })
       .limit(2500),
     supabase.from("admins_avora").select("*").order("created_at", { ascending: true }),
+    supabase
+      .from("guestlists_avora")
+      .select("*")
+      .order("event_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("guestlist_entries_avora")
+      .select("*")
+      .order("created_at", { ascending: true })
+      .limit(5000),
   ]);
 
   const renderedAt = new Date().toISOString();
@@ -119,6 +140,8 @@ export default async function AdminPage() {
       links={(linksRes.data as LinkAvora[] | null) || []}
       clicks={(clicksRes.data as ClickAvora[] | null) || []}
       admins={(adminsRes.data as AdminAvora[] | null) || []}
+      guestlists={(guestlistsRes.data as GuestlistAvora[] | null) || []}
+      guestlistEntries={(guestlistEntriesRes.data as GuestlistEntryAvora[] | null) || []}
     />
   );
 }

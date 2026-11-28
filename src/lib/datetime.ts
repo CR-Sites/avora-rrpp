@@ -53,3 +53,21 @@ export function getArHour(iso: string): number {
   if (!d) return -1;
   return d.getUTCHours();
 }
+
+/** Returns YYYY-MM-DD in Argentina UTC-3 */
+export function getArDateIso(iso: string): string {
+  const d = toArDate(iso);
+  if (!d) return "";
+  const yyyy = d.getUTCFullYear();
+  const mm = pad2(d.getUTCMonth() + 1);
+  const dd = pad2(d.getUTCDate());
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Formats a YYYY-MM-DD date string deterministically as DD/MM/YYYY */
+export function formatArDateOnly(dateStr: string | null | undefined): string {
+  if (!dateStr) return "Sin fecha";
+  const m = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return dateStr;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}

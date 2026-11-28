@@ -154,3 +154,73 @@ export interface ClientTelemetryPayload {
   referrer?: string;
   extra?: Record<string, unknown>;
 }
+
+export type GuestlistCategory = "dama_free" | "hombre_consumo";
+export type GuestlistStatus = "active" | "closed" | "archived";
+
+export interface GuestlistAvora {
+  id: string;
+  slug: string;
+  title: string;
+  event_date: string | null;
+  rrpp_name: string;
+  description: string | null;
+  women_label: string;
+  men_label: string;
+  women_cap: number | null;
+  men_cap: number | null;
+  is_open: boolean;
+  status: GuestlistStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GuestlistEntryAvora {
+  id: string;
+  guestlist_id: string;
+  member_id: string | null;
+  category: GuestlistCategory;
+  rrpp_name: string;
+  first_name: string;
+  last_name: string;
+  dni: string;
+  bombo_email: string;
+  whatsapp_phone: string | null;
+  synced_to_sheet: boolean;
+  synced_at: string | null;
+  notes: string | null;
+  ip_address: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  os: string | null;
+  browser: string | null;
+  device_type: string | null;
+  in_app_source: string | null;
+  created_at: string;
+}
+
+export interface PublicGuestlistConfig {
+  id: string;
+  slug: string;
+  title: string;
+  event_date: string | null;
+  rrpp_name: string;
+  description: string | null;
+  women_label: string;
+  men_label: string;
+  women_cap: number | null;
+  men_cap: number | null;
+  women_count: number;
+  men_count: number;
+  is_open: boolean;
+  status: GuestlistStatus;
+  brand_name: string;
+  prefill: {
+    full_name: string;
+    bombo_email: string;
+    whatsapp_phone: string;
+  } | null;
+}

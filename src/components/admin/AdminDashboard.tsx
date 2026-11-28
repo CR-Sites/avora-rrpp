@@ -16,10 +16,13 @@ import {
   MapPin,
   Eye,
   EyeOff,
+  ClipboardList,
 } from "lucide-react";
 import type {
   AdminAvora,
   ClickAvora,
+  GuestlistAvora,
+  GuestlistEntryAvora,
   InterestOption,
   LinkAvora,
   MemberAvora,
@@ -29,6 +32,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AvoraLogoMark } from "@/components/AvoraIcons";
 import MembersPanel from "./MembersPanel";
 import LinksPanel from "./LinksPanel";
+import GuestlistsPanel from "./GuestlistsPanel";
 import SettingsPanel from "./SettingsPanel";
 
 const LiveMapPanel = dynamic(() => import("./LiveMapPanel"), {
@@ -49,9 +53,11 @@ interface Props {
   links: LinkAvora[];
   clicks: ClickAvora[];
   admins: AdminAvora[];
+  guestlists: GuestlistAvora[];
+  guestlistEntries: GuestlistEntryAvora[];
 }
 
-type ActiveTab = "members" | "links" | "map" | "settings";
+type ActiveTab = "members" | "links" | "guestlists" | "map" | "settings";
 
 export default function AdminDashboard({
   userEmail,
@@ -62,6 +68,8 @@ export default function AdminDashboard({
   links,
   clicks,
   admins,
+  guestlists,
+  guestlistEntries,
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>("members");
@@ -93,6 +101,7 @@ export default function AdminDashboard({
   };
 
   const humanClicksCount = clicks.filter((c) => !c.is_bot).length;
+  const pendingSheetCount = guestlistEntries.filter((e) => !e.synced_to_sheet).length;
   const geolocatedCount =
     members.filter((m) => m.latitude !== null && m.longitude !== null).length +
     clicks.filter((c) => !c.is_bot && c.latitude !== null && c.longitude !== null).length;
@@ -190,6 +199,30 @@ export default function AdminDashboard({
                 }`}
               >
                 {humanClicksCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("guestlists")}
+              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold whitespace-nowrap transition-all ${
+                activeTab === "guestlists"
+                  ? "bg-violet-600 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              <span>Listas / Free</span>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-mono ${
+                  activeTab === "guestlists"
+                    ? "bg-white/20 text-white"
+                    : pendingSheetCount > 0
+                    ? "bg-amber-500/20 text-amber-300"
+                    : "bg-zinc-800 text-zinc-400"
+                }`}
+              >
+                {pendingSheetCount > 0 ? pendingSheetCount : guestlistEntries.length}
               </span>
             </button>
 
@@ -317,6 +350,17 @@ export default function AdminDashboard({
           <LinksPanel
             links={links}
             clicks={clicks}
+            presentationMode={presentationMode}
+            onRefresh={handleRefresh}
+          />
+        )}
+
+        {activeTab === "guestlists" && (
+          <GuestlistsPanel
+            guestlists={guestlists}
+            entries={guestlistEntries}
+            defaultRrppName={settings.brand_name || "RRPP"}
+            renderedAt={renderedAt}
             presentationMode={presentationMode}
             onRefresh={handleRefresh}
           />
