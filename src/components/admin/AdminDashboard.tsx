@@ -109,9 +109,9 @@ export default function AdminDashboard({
   return (
     <div className="min-h-screen bg-avora-bg text-zinc-100 flex flex-col">
       {/* Top Command Header */}
-      <header className="sticky top-0 z-30 border-b border-avora-border bg-avora-surface/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Brand + Gate Quick Link */}
+      <header className="sticky top-0 z-30 border-b border-avora-border bg-avora-surface/95 backdrop-blur-xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-3 pb-2.5 space-y-2.5">
+          {/* Tier 1: Brand + Quick Actions */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2.5">
               <AvoraLogoMark className="w-8 h-8" />
@@ -158,9 +158,80 @@ export default function AdminDashboard({
                 <LogOut className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Desktop Right Quick Actions */}
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPresentationMode((v) => !v)}
+                title="Ocultar teléfonos, mails e IPs para proyectar en reunión"
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+                  presentationMode
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-200"
+                    : "border-avora-border bg-avora-bg hover:bg-zinc-900 text-zinc-300"
+                }`}
+              >
+                {presentationMode ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Modo Reunión</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-zinc-400" />
+                    <span>Datos Visibles</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyGateLink}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors"
+              >
+                {copiedGate ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Link Grupo Copiado</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-violet-400" />
+                    <span>Copiar /unirse</span>
+                  </>
+                )}
+              </button>
+
+              <Link
+                href="/unirse"
+                target="_blank"
+                title="Ver formulario público"
+                className="rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 p-2 text-zinc-300 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Link>
+
+              <button
+                type="button"
+                onClick={handleRefresh}
+                title="Actualizar métricas en vivo"
+                className="rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 p-2 text-zinc-300 transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${isPending ? "animate-spin text-violet-400" : ""}`} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                title="Cerrar sesión"
+                className="rounded-xl border border-avora-border bg-avora-bg hover:border-red-500/40 hover:text-red-400 p-2 text-zinc-400 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          {/* Primary Panel Switcher (Grupo <-> Links de Compra <-> Ajustes) */}
+          {/* Tier 2: Full-width 5-Tab Navigation Bar */}
           <nav className="flex items-center gap-1.5 rounded-xl border border-avora-border bg-avora-bg p-1 overflow-x-auto">
             <button
               type="button"
@@ -259,77 +330,6 @@ export default function AdminDashboard({
               <span>Configuración</span>
             </button>
           </nav>
-
-          {/* Right Quick Actions */}
-          <div className="hidden md:flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPresentationMode((v) => !v)}
-              title="Ocultar teléfonos, mails e IPs para proyectar en reunión"
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
-                presentationMode
-                  ? "border-amber-500/50 bg-amber-500/15 text-amber-200"
-                  : "border-avora-border bg-avora-bg hover:bg-zinc-900 text-zinc-300"
-              }`}
-            >
-              {presentationMode ? (
-                <>
-                  <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Modo Reunión</span>
-                </>
-              ) : (
-                <>
-                  <Eye className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Datos Visibles</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopyGateLink}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors"
-            >
-              {copiedGate ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Link Grupo Copiado</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5 text-violet-400" />
-                  <span>Copiar /unirse</span>
-                </>
-              )}
-            </button>
-
-            <Link
-              href="/unirse"
-              target="_blank"
-              title="Ver formulario público"
-              className="rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 p-2 text-zinc-300 transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-            </Link>
-
-            <button
-              type="button"
-              onClick={handleRefresh}
-              title="Actualizar métricas en vivo"
-              className="rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 p-2 text-zinc-300 transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${isPending ? "animate-spin text-violet-400" : ""}`} />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSignOut}
-              title="Cerrar sesión"
-              className="rounded-xl border border-avora-border bg-avora-bg hover:border-red-500/40 hover:text-red-400 p-2 text-zinc-400 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </header>
 

@@ -73,6 +73,8 @@ export default function GuestlistsPanel({
   const [categoryTab, setCategoryTab] = useState<CategoryTab>("dama_free");
   const [searchEntries, setSearchEntries] = useState("");
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
+  const [copiedRowId, setCopiedRowId] = useState<string | null>(null);
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
   const [sheetBanner, setSheetBanner] = useState<{ ok: boolean; msg: string } | null>(null);
   const [markingSynced, setMarkingSynced] = useState(false);
 
@@ -224,11 +226,43 @@ export default function GuestlistsPanel({
     });
   }, [selectedEntries, categoryTab, searchEntries]);
 
-  const pendingInCurrentTab = useMemo(() => {
-    return selectedEntries.filter(
-      (e) => !e.synced_to_sheet && (categoryTab === "all" || e.category === categoryTab)
+  useEffect(() => {
+    setSelectedEntryIds([]);
+  }, [selectedListId]);
+
+  const selectedRows = useMemo(() => {
+    if (selectedEntryIds.length === 0) return [];
+    const idSet = new Set(selectedEntryIds);
+    return selectedEntries.filter((e) => idSet.has(e.id));
+  }, [selectedEntries, selectedEntryIds]);
+
+  const allVisibleSelected =
+    visibleEntries.length > 0 &&
+    visibleEntries.every((e) => selectedEntryIds.includes(e.id));
+
+  const toggleSelectEntry = (id: string) => {
+    setSelectedEntryIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
-  }, [selectedEntries, categoryTab]);
+  };
+
+  const toggleSelectAllVisible = () => {
+    const visibleIds = visibleEntries.map((e) => e.id);
+    if (allVisibleSelected) {
+      const visibleSet = new Set(visibleIds);
+      setSelectedEntryIds((prev) => prev.filter((id) => !visibleSet.has(id)));
+    } else {
+      setSelectedEntryIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const selectPendingByCategory = (cat: "dama_free" | "hombre_consumo") => {
+    const ids = selectedEntries
+      .filter((e) => e.category === cat && !e.synced_to_sheet)
+      .map((e) => e.id);
+    setSelectedEntryIds(ids);
+    setSheetBanner(null);
+  };
 
   const buildPublicListUrl = (listSlug: string) => {
     if (typeof window === "undefined") return `/lista/${listSlug}`;
@@ -378,35 +412,35 @@ export default function GuestlistsPanel({
       .join("\n");
   };
 
-  const handleCopyTsvForSheet = async (onlyPending: boolean) => {
+  const handleCopySelectedForSheet = async () => {
     if (!selectedList) return;
-    const rows = onlyPending
-      ? pendingInCurrentTab
-      : selectedEntries.filter((e) => categoryTab === "all" || e.category === categoryTab);
-
-    if (rows.length === 0) {
+    if (selectedRows.length === 0) {
       setSheetBanner({
         ok: false,
-        msg: onlyPending
-          ? "No hay invitados pendientes para volcar en esta pestaña."
-          : "No hay invitados cargados en esta pestaña.",
+        msg: "Tildá primero los invitados que querés copiar con los checkboxes de la tabla.",
       });
       return;
     }
 
+    const hasWomen = selectedRows.some((r) => r.category === "dama_free");
+    const hasMen = selectedRows.some((r) => r.category === "hombre_consumo");
+
     try {
-      const tsv = buildSheetTsv(rows);
+      const tsv = buildSheetTsv(selectedRows);
       await navigator.clipboard.writeText(tsv);
-      const tabName =
-        categoryTab === "dama_free"
-          ? selectedList.women_label
-          : categoryTab === "hombre_consumo"
-          ? selectedList.men_label
-          : "la pestaña correspondiente";
-      setSheetBanner({
-        ok: true,
-        msg: `Copiadas ${rows.length} filas en formato exacto. Andá a la pestaña "${tabName}" del Google Sheet, hacé clic en la primera celda libre de la columna B (RRPP) y apretá Ctrl + V.`,
-      });
+
+      if (hasWomen && hasMen) {
+        setSheetBanner({
+          ok: false,
+          msg: `Copiadas ${selectedRows.length} filas, pero mezclaste mujeres y hombres juntos. Recordá que en el Google Sheet van en pestañas separadas.`,
+        });
+      } else {
+        const targetTab = hasWomen ? selectedList.women_label : selectedList.men_label;
+        setSheetBanner({
+          ok: true,
+          msg: `Copiadas ${selectedRows.length} filas de "${targetTab}". Andá a esa pestaña en el Google Sheet, hacé clic en la primera celda libre de la columna B (RRPP) y apretá Ctrl + V.`,
+        });
+      }
     } catch {
       setSheetBanner({
         ok: false,
@@ -415,22 +449,33 @@ export default function GuestlistsPanel({
     }
   };
 
-  const handleMarkPendingAsSynced = async () => {
-    if (pendingInCurrentTab.length === 0) return;
+  const handleCopySingleRow = async (entry: GuestlistEntryAvora) => {
+    try {
+      await navigator.clipboard.writeText(buildSheetTsv([entry]));
+      setCopiedRowId(entry.id);
+      setTimeout(() => setCopiedRowId(null), 1600);
+    } catch {
+      // Clipboard ignored
+    }
+  };
+
+  const handleMarkSelectedAsSynced = async () => {
+    if (selectedRows.length === 0) return;
     setMarkingSynced(true);
     setSheetBanner(null);
     try {
       const supabase = createSupabaseBrowserClient();
-      const ids = pendingInCurrentTab.map((e) => e.id);
+      const ids = selectedRows.map((e) => e.id);
       const { error } = await supabase
         .from("guestlist_entries_avora")
         .update({ synced_to_sheet: true, synced_at: new Date().toISOString() })
         .in("id", ids);
 
       if (error) throw error;
+      setSelectedEntryIds([]);
       setSheetBanner({
         ok: true,
-        msg: `Listo: ${ids.length} invitados quedaron marcados como ya cargados en el Sheet.`,
+        msg: `Listo: ${ids.length} invitados seleccionados quedaron marcados como ya cargados en el Sheet.`,
       });
       await refreshGuestlistsFromDb();
     } catch (err) {
@@ -474,10 +519,11 @@ export default function GuestlistsPanel({
 
   const handleExportListCsv = () => {
     if (!selectedList) return;
+    const rowsToExport = selectedRows.length > 0 ? selectedRows : visibleEntries;
     downloadCsv(
       `avora-lista-${selectedList.slug}-${categoryTab}.csv`,
       ["Categoría", "RRPP", "Nombre", "Apellido", "DNI", "Mail Bombo", "Instagram", "WhatsApp", "En Sheet", "Fecha"],
-      visibleEntries.map((e) => [
+      rowsToExport.map((e) => [
         e.category === "dama_free" ? selectedList.women_label : selectedList.men_label,
         e.rrpp_name,
         e.first_name,
@@ -648,38 +694,28 @@ export default function GuestlistsPanel({
               </button>
             </div>
 
-            {/* 1-Click Google Sheets Sync Actions */}
+            {/* Manual Selection Google Sheets Sync Actions */}
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => handleCopyTsvForSheet(true)}
-                disabled={pendingInCurrentTab.length === 0}
+                onClick={handleCopySelectedForSheet}
+                disabled={selectedRows.length === 0}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 px-3.5 py-2 text-xs font-semibold text-white transition-colors"
               >
                 <ClipboardCopy className="w-3.5 h-3.5" />
-                <span>Copiar pendientes para Sheet ({pendingInCurrentTab.length})</span>
+                <span>Copiar seleccionados ({selectedRows.length})</span>
               </button>
-
-              {pendingInCurrentTab.length > 0 && (
-                <button
-                  type="button"
-                  disabled={markingSynced}
-                  onClick={handleMarkPendingAsSynced}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>{markingSynced ? "Marcando..." : "Marcar volcados"}</span>
-                </button>
-              )}
 
               <button
                 type="button"
-                onClick={() => handleCopyTsvForSheet(false)}
-                disabled={visibleEntries.length === 0}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 disabled:opacity-40 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors"
+                disabled={markingSynced || selectedRows.length === 0}
+                onClick={handleMarkSelectedAsSynced}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-40 px-3 py-2 text-xs font-semibold text-emerald-300 transition-colors"
               >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copiar todos</span>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>
+                  {markingSynced ? "Marcando..." : `Marcar volcados (${selectedRows.length})`}
+                </span>
               </button>
 
               <button
@@ -689,7 +725,7 @@ export default function GuestlistsPanel({
                 className="inline-flex items-center gap-1.5 rounded-xl border border-avora-border bg-avora-bg hover:bg-zinc-900 disabled:opacity-40 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>CSV</span>
+                <span>CSV {selectedRows.length > 0 ? `(${selectedRows.length})` : ""}</span>
               </button>
             </div>
           </div>
@@ -706,16 +742,47 @@ export default function GuestlistsPanel({
             </div>
           )}
 
-          {/* Search inside list */}
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchEntries}
-              onChange={(e) => setSearchEntries(e.target.value)}
-              placeholder="Buscar por nombre, apellido, DNI o mail de Bombo..."
-              className="w-full rounded-xl border border-avora-border bg-avora-bg pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none"
-            />
+          {/* Quick Selection Helpers + Search */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchEntries}
+                onChange={(e) => setSearchEntries(e.target.value)}
+                placeholder="Buscar por nombre, apellido, DNI, Instagram o mail..."
+                className="w-full rounded-xl border border-avora-border bg-avora-bg pl-9 pr-3.5 py-2 text-xs text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="text-zinc-500">Selección rápida:</span>
+              <button
+                type="button"
+                disabled={tabStats.womenPending === 0}
+                onClick={() => selectPendingByCategory("dama_free")}
+                className="rounded-lg border border-violet-500/35 bg-violet-500/10 hover:bg-violet-500/20 disabled:opacity-40 px-2.5 py-1.5 font-medium text-violet-200 transition-colors"
+              >
+                Sel. Mujeres Pend. ({tabStats.womenPending})
+              </button>
+              <button
+                type="button"
+                disabled={tabStats.menPending === 0}
+                onClick={() => selectPendingByCategory("hombre_consumo")}
+                className="rounded-lg border border-cyan-500/35 bg-cyan-500/10 hover:bg-cyan-500/20 disabled:opacity-40 px-2.5 py-1.5 font-medium text-cyan-200 transition-colors"
+              >
+                Sel. Hombres Pend. ({tabStats.menPending})
+              </button>
+              {selectedEntryIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntryIds([])}
+                  className="rounded-lg border border-avora-border bg-avora-bg hover:bg-zinc-900 px-2.5 py-1.5 font-medium text-zinc-300 transition-colors"
+                >
+                  Limpiar ({selectedEntryIds.length})
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -736,7 +803,16 @@ export default function GuestlistsPanel({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-avora-border text-[11px] uppercase tracking-wider text-zinc-400 bg-avora-bg/50">
-                    <th className="py-3 px-4 font-medium">#</th>
+                    <th className="py-3 pl-4 pr-2 w-10">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        title="Seleccionar todos los visibles"
+                        className="rounded border-zinc-700 bg-zinc-900 text-emerald-500 cursor-pointer"
+                      />
+                    </th>
+                    <th className="py-3 px-3 font-medium">#</th>
                     <th className="py-3 px-4 font-medium">RRPP</th>
                     <th className="py-3 px-4 font-medium">Nombre y Apellido</th>
                     <th className="py-3 px-4 font-medium">DNI</th>
@@ -757,9 +833,23 @@ export default function GuestlistsPanel({
                     const displayEmail = presentationMode
                       ? maskEmail(entry.bombo_email)
                       : entry.bombo_email;
+                    const isChecked = selectedEntryIds.includes(entry.id);
                     return (
-                      <tr key={entry.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="py-3 px-4 font-mono text-zinc-500">{idx + 1}</td>
+                      <tr
+                        key={entry.id}
+                        className={`transition-colors ${
+                          isChecked ? "bg-emerald-500/[0.06]" : "hover:bg-white/[0.02]"
+                        }`}
+                      >
+                        <td className="py-3 pl-4 pr-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleSelectEntry(entry.id)}
+                            className="rounded border-zinc-700 bg-zinc-900 text-emerald-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="py-3 px-3 font-mono text-zinc-500">{idx + 1}</td>
                         <td className="py-3 px-4 text-zinc-300">{entry.rrpp_name}</td>
                         <td className="py-3 px-4">
                           <p className="font-semibold text-white">{displayFull}</p>
@@ -820,6 +910,18 @@ export default function GuestlistsPanel({
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleCopySingleRow(entry)}
+                              title="Copiar solo esta fila para Sheet"
+                              className="rounded-lg border border-avora-border bg-avora-bg hover:bg-zinc-800 p-1.5 text-zinc-300 transition-colors"
+                            >
+                              {copiedRowId === entry.id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5 text-cyan-400" />
+                              )}
+                            </button>
                             {!presentationMode && entry.whatsapp_phone && (
                               <a
                                 href={buildWaMeUrl(entry.whatsapp_phone)}
