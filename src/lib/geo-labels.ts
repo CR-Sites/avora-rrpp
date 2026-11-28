@@ -73,3 +73,9 @@ export function maskName(name: string | null | undefined): string {
   if (parts.length === 1) return parts[0];
   return `${parts[0]} ${parts[1][0].toUpperCase()}.`;
 }
+
+export function maskInstagram(handle: string | null | undefined): string {
+  const clean = (handle || "").trim().replace(/^@+/, "");
+  if (!clean) return "••••";
+  return `@${clean.slice(0, Math.min(2, clean.length))}•••`;
+}

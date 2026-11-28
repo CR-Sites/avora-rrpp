@@ -37,6 +37,7 @@ export interface MemberAvora {
   whatsapp_phone: string;
   whatsapp_raw: string | null;
   bombo_email: string;
+  instagram_handle: string | null;
   interest_ids: string[];
   interest_labels: string[];
   visitor_token: string;
@@ -185,6 +186,7 @@ export interface GuestlistEntryAvora {
   last_name: string;
   dni: string;
   bombo_email: string;
+  instagram_handle: string | null;
   whatsapp_phone: string | null;
   synced_to_sheet: boolean;
   synced_at: string | null;
@@ -222,5 +224,6 @@ export interface PublicGuestlistConfig {
     full_name: string;
     bombo_email: string;
     whatsapp_phone: string;
+    instagram_handle: string | null;
   } | null;
 }

@@ -40,6 +40,7 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
   const [lastName, setLastName] = useState(prefilled.last);
   const [dni, setDni] = useState("");
   const [bomboEmail, setBomboEmail] = useState(config.prefill?.bombo_email || "");
+  const [instagram, setInstagram] = useState(config.prefill?.instagram_handle || "");
   const [whatsappPhone, setWhatsappPhone] = useState(config.prefill?.whatsapp_phone || "");
 
   const [submitting, setSubmitting] = useState(false);
@@ -50,9 +51,20 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
     rrppName: string;
     dniClean: string;
     fullName: string;
+    instagramHandle: string;
   } | null>(null);
 
   const cleanDniPreview = useMemo(() => dni.replace(/\D/g, ""), [dni]);
+  const cleanIgPreview = useMemo(() => {
+    const clean = instagram
+      .trim()
+      .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+      .split(/[?#]/)[0]
+      .replace(/\/+$/, "")
+      .replace(/^@+/, "")
+      .replace(/\s+/g, "");
+    return clean ? `@${clean.toLowerCase()}` : "";
+  }, [instagram]);
 
   const womenRemaining =
     config.women_cap !== null ? Math.max(0, config.women_cap - config.women_count) : null;
@@ -82,6 +94,7 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
           last_name: lastName,
           dni,
           bombo_email: bomboEmail,
+          instagram_handle: instagram,
           whatsapp_phone: whatsappPhone,
           rrpp_override: rrppOverride || undefined,
           visitor_token: storedVid,
@@ -99,6 +112,7 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
         rrppName: data.rrpp_name || rrppOverride || config.rrpp_name,
         dniClean: cleanDniPreview,
         fullName: `${firstName.trim()} ${lastName.trim()}`,
+        instagramHandle: cleanIgPreview,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado al enviar.");
@@ -184,6 +198,10 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
                   <span className="font-mono text-cyan-300">{confirmation.dniClean}</span>
                 </div>
                 <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">Instagram</span>
+                  <span className="font-mono text-violet-300">{confirmation.instagramHandle}</span>
+                </div>
+                <div className="flex items-center justify-between">
                   <span className="text-zinc-500">Lista</span>
                   <span className="font-semibold text-emerald-300">{confirmation.categoryLabel}</span>
                 </div>
@@ -265,8 +283,8 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
                       {menFull
                         ? "Cupo completo"
                         : menRemaining !== null
-                        ? `${menRemaining} lugares`
-                        : "Disponible"}
+                        ? `${menRemaining} lugares • Consumición en barra`
+                        : "Abonando consumición en barra"}
                     </p>
                   </button>
                 </div>
@@ -361,6 +379,32 @@ export default function PublicGuestlistForm({ config, rrppOverride }: Props) {
                   <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                   <span>Obligatorio para acreditación en puerta por Bombo.</span>
                 </p>
+              </div>
+
+              {/* Instagram Account */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label
+                    htmlFor="guestInstagram"
+                    className="block text-xs font-medium uppercase tracking-wider text-zinc-300"
+                  >
+                    Cuenta de Instagram
+                  </label>
+                  {cleanIgPreview && (
+                    <span className="text-[11px] font-mono text-violet-300">{cleanIgPreview}</span>
+                  )}
+                </div>
+                <input
+                  id="guestInstagram"
+                  type="text"
+                  required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  placeholder="Ej: @tuusuario"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                  className="w-full rounded-xl border border-avora-border bg-avora-bg/90 px-3.5 py-2.5 text-sm text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
+                />
               </div>
 
               {/* Optional WhatsApp */}

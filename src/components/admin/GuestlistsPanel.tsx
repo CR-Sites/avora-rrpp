@@ -26,8 +26,8 @@ import type {
 } from "@/types/avora";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { formatArDateOnly, formatArDateTimeShort, getArDateIso } from "@/lib/datetime";
-import { maskEmail, maskName, maskPhone } from "@/lib/geo-labels";
-import { buildWaMeUrl } from "@/lib/telemetry";
+import { maskEmail, maskInstagram, maskName, maskPhone } from "@/lib/geo-labels";
+import { buildInstagramUrl, buildWaMeUrl } from "@/lib/telemetry";
 import { downloadCsv } from "@/lib/csv";
 import { WhatsAppSvg } from "@/components/AvoraIcons";
 
@@ -85,7 +85,7 @@ export default function GuestlistsPanel({
   const [rrppName, setRrppName] = useState(defaultRrppName || "");
   const [description, setDescription] = useState("");
   const [womenLabel, setWomenLabel] = useState("Dama - Free");
-  const [menLabel, setMenLabel] = useState("Hombre - 100% Consumo");
+  const [menLabel, setMenLabel] = useState("Hombre - Con Consumición");
   const [womenCap, setWomenCap] = useState("");
   const [menCap, setMenCap] = useState("");
   const [isOpen, setIsOpen] = useState(true);
@@ -218,6 +218,7 @@ export default function GuestlistsPanel({
         e.last_name.toLowerCase().includes(q) ||
         e.dni.includes(q) ||
         e.bombo_email.toLowerCase().includes(q) ||
+        (e.instagram_handle || "").toLowerCase().includes(q) ||
         e.rrpp_name.toLowerCase().includes(q)
       );
     });
@@ -251,10 +252,10 @@ export default function GuestlistsPanel({
     setEventDate(todayArIso || "");
     setRrppName(defaultRrppName || "RRPP");
     setDescription(
-      "Completá tus datos reales y tu mail de Bombo para quedar en lista (Dama Free / Hombre 100% Consumo)."
+      "Completá tus datos reales y tu mail de Bombo para quedar en lista (Mujeres Free / Hombres ingresan abonando una consumición en barra)."
     );
     setWomenLabel("Dama - Free");
-    setMenLabel("Hombre - 100% Consumo");
+    setMenLabel("Hombre - Con Consumición");
     setWomenCap("");
     setMenCap("");
     setIsOpen(true);
@@ -301,7 +302,7 @@ export default function GuestlistsPanel({
         rrpp_name: rrppName.trim() || defaultRrppName || "RRPP",
         description: description.trim() || null,
         women_label: womenLabel.trim() || "Dama - Free",
-        men_label: menLabel.trim() || "Hombre - 100% Consumo",
+        men_label: menLabel.trim() || "Hombre - Con Consumición",
         women_cap: parsedWomenCap && parsedWomenCap > 0 ? parsedWomenCap : null,
         men_cap: parsedMenCap && parsedMenCap > 0 ? parsedMenCap : null,
         is_open: isOpen,
@@ -398,9 +399,9 @@ export default function GuestlistsPanel({
       await navigator.clipboard.writeText(tsv);
       const tabName =
         categoryTab === "dama_free"
-          ? "DAMA - FREE"
+          ? selectedList.women_label
           : categoryTab === "hombre_consumo"
-          ? "HOMBRES - 100% CONSUMO"
+          ? selectedList.men_label
           : "la pestaña correspondiente";
       setSheetBanner({
         ok: true,
@@ -475,7 +476,7 @@ export default function GuestlistsPanel({
     if (!selectedList) return;
     downloadCsv(
       `avora-lista-${selectedList.slug}-${categoryTab}.csv`,
-      ["Categoría", "RRPP", "Nombre", "Apellido", "DNI", "Mail Bombo", "WhatsApp", "En Sheet", "Fecha"],
+      ["Categoría", "RRPP", "Nombre", "Apellido", "DNI", "Mail Bombo", "Instagram", "WhatsApp", "En Sheet", "Fecha"],
       visibleEntries.map((e) => [
         e.category === "dama_free" ? selectedList.women_label : selectedList.men_label,
         e.rrpp_name,
@@ -483,6 +484,7 @@ export default function GuestlistsPanel({
         e.last_name,
         e.dni,
         e.bombo_email,
+        e.instagram_handle || "",
         e.whatsapp_phone || "",
         e.synced_to_sheet ? "Sí" : "Pendiente",
         formatArDateTimeShort(e.created_at),
@@ -587,7 +589,7 @@ export default function GuestlistsPanel({
           </div>
         </div>
 
-        {/* Sheet Category Sub-Tabs (DAMA - FREE | HOMBRES - 100% CONSUMO | TODOS) */}
+        {/* Sheet Category Sub-Tabs (DAMA - FREE | HOMBRES - CON CONSUMICIÓN | TODOS) */}
         <div className="rounded-2xl border border-avora-border bg-avora-surface p-4 space-y-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-avora-border bg-avora-bg p-1">
@@ -739,6 +741,7 @@ export default function GuestlistsPanel({
                     <th className="py-3 px-4 font-medium">Nombre y Apellido</th>
                     <th className="py-3 px-4 font-medium">DNI</th>
                     <th className="py-3 px-4 font-medium">Mail Bombo</th>
+                    <th className="py-3 px-4 font-medium">Instagram</th>
                     {categoryTab === "all" && <th className="py-3 px-4 font-medium">Categoría</th>}
                     <th className="py-3 px-4 font-medium">Estado Sheet</th>
                     <th className="py-3 px-4 font-medium text-right">Acciones</th>
@@ -767,6 +770,26 @@ export default function GuestlistsPanel({
                         </td>
                         <td className="py-3 px-4 font-mono text-cyan-300">{displayDni}</td>
                         <td className="py-3 px-4 text-zinc-300">{displayEmail}</td>
+                        <td className="py-3 px-4">
+                          {entry.instagram_handle ? (
+                            presentationMode ? (
+                              <span className="font-mono text-zinc-400">
+                                {maskInstagram(entry.instagram_handle)}
+                              </span>
+                            ) : (
+                              <a
+                                href={buildInstagramUrl(entry.instagram_handle)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-violet-300 hover:text-violet-200 hover:underline"
+                              >
+                                {entry.instagram_handle}
+                              </a>
+                            )
+                          ) : (
+                            <span className="text-zinc-600">—</span>
+                          )}
+                        </td>
                         {categoryTab === "all" && (
                           <td className="py-3 px-4">
                             <span

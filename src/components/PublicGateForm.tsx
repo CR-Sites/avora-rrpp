@@ -43,6 +43,7 @@ export default function PublicGateForm({ config }: Props) {
   const [fullName, setFullName] = useState("");
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [bomboEmail, setBomboEmail] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [selectedInterests, setSelectedInterests] = useState<string[]>(() =>
     config.interests.map((i) => i.id)
   );
@@ -129,6 +130,7 @@ export default function PublicGateForm({ config }: Props) {
         full_name: fullName,
         whatsapp_phone: whatsappPhone,
         bombo_email: bomboEmail,
+        instagram_handle: instagram,
         interest_ids: selectedInterests,
         anon_visitor_id: anonId,
         visitor_token: storedVid,
@@ -332,6 +334,26 @@ export default function PublicGateForm({ config }: Props) {
                   <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
                   <span>Usá el mismo correo registrado en tu cuenta de Bombo.</span>
                 </p>
+              </div>
+
+              {/* Instagram Handle */}
+              <div>
+                <label
+                  htmlFor="instagramHandle"
+                  className="block text-xs font-medium uppercase tracking-wider text-zinc-300 mb-1.5"
+                >
+                  Cuenta de Instagram (Opcional)
+                </label>
+                <input
+                  id="instagramHandle"
+                  type="text"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  placeholder="Ej: @tuusuario"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                  className="w-full rounded-xl border border-avora-border bg-avora-bg/90 px-3.5 py-3 text-sm text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition-colors"
+                />
               </div>
 
               {/* Configurable Interests Checkboxes */}

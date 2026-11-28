@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AVORA_MEMBER_COOKIE } from "@/lib/cookies";
-import { normalizeWhatsappPhone, parseUserAgent, resolveServerGeo } from "@/lib/telemetry";
+import {
+  normalizeInstagramHandle,
+  normalizeWhatsappPhone,
+  parseUserAgent,
+  resolveServerGeo,
+} from "@/lib/telemetry";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,6 +18,7 @@ export async function POST(request: NextRequest) {
     const lastName = String(body.last_name || "").trim();
     const dniDigits = String(body.dni || "").replace(/\D/g, "");
     const bomboEmail = String(body.bombo_email || "").trim().toLowerCase();
+    const instagramHandle = normalizeInstagramHandle(String(body.instagram_handle || ""));
     const rawPhone = String(body.whatsapp_phone || "").trim();
     const normalizedPhone = rawPhone ? normalizeWhatsappPhone(rawPhone) : "";
     const rrppOverride = String(body.rrpp_override || "").trim();
@@ -38,6 +44,7 @@ export async function POST(request: NextRequest) {
         last_name: lastName,
         dni: dniDigits,
         bombo_email: bomboEmail,
+        instagram_handle: instagramHandle || null,
         whatsapp_phone: normalizedPhone,
         rrpp_override: rrppOverride || null,
         visitor_token: visitorToken || null,

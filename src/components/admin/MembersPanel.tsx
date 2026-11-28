@@ -14,10 +14,10 @@ import {
   Flame,
 } from "lucide-react";
 import type { ClickAvora, InterestOption, MemberAvora } from "@/types/avora";
-import { buildWaMeUrl } from "@/lib/telemetry";
+import { buildInstagramUrl, buildWaMeUrl } from "@/lib/telemetry";
 import { downloadCsv } from "@/lib/csv";
 import { formatArDateTimeShort, formatArFullDateTime } from "@/lib/datetime";
-import { formatLocationLabel, maskEmail, maskName, maskPhone } from "@/lib/geo-labels";
+import { formatLocationLabel, maskEmail, maskInstagram, maskName, maskPhone } from "@/lib/geo-labels";
 import { WhatsAppSvg } from "@/components/AvoraIcons";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import TelemetryModal from "./TelemetryModal";
@@ -76,6 +76,7 @@ export default function MembersPanel({
         m.full_name.toLowerCase().includes(q) ||
         m.whatsapp_phone.toLowerCase().includes(q) ||
         m.bombo_email.toLowerCase().includes(q) ||
+        (m.instagram_handle || "").toLowerCase().includes(q) ||
         formatLocationLabel(m.city, m.region, m.country, "").toLowerCase().includes(q) ||
         m.interest_labels.some((lbl) => lbl.toLowerCase().includes(q))
       );
@@ -118,6 +119,7 @@ export default function MembersPanel({
         "Nombre Completo",
         "WhatsApp",
         "Mail de Bombo",
+        "Instagram",
         "Intereses",
         "Clics en Links de Compra",
         "Ciudad",
@@ -133,6 +135,7 @@ export default function MembersPanel({
         m.full_name,
         m.whatsapp_phone,
         m.bombo_email,
+        m.instagram_handle || "",
         m.interest_labels.join(" | "),
         clicksByMember.get(m.id)?.length || 0,
         m.city,
@@ -359,6 +362,21 @@ export default function MembersPanel({
                         <p className="text-zinc-300 truncate max-w-[210px]" title={displayEmail}>
                           {displayEmail}
                         </p>
+                        {member.instagram_handle &&
+                          (presentationMode ? (
+                            <p className="text-[11px] font-mono text-zinc-500">
+                              {maskInstagram(member.instagram_handle)}
+                            </p>
+                          ) : (
+                            <a
+                              href={buildInstagramUrl(member.instagram_handle)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block text-[11px] font-mono text-violet-300 hover:text-violet-200 hover:underline"
+                            >
+                              {member.instagram_handle}
+                            </a>
+                          ))}
                       </td>
 
                       <td className="py-3.5 px-4">

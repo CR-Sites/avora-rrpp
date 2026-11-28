@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   extractRequestSnapshot,
+  normalizeInstagramHandle,
   normalizeWhatsappPhone,
   parseUserAgent,
   resolveServerGeo,
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
     const rawPhone = String(body.whatsapp_phone || "").trim();
     const normalizedPhone = normalizeWhatsappPhone(rawPhone);
     const bomboEmail = String(body.bombo_email || "").trim().toLowerCase();
+    const instagramHandle = normalizeInstagramHandle(String(body.instagram_handle || ""));
     const interestIds = Array.isArray(body.interest_ids) ? body.interest_ids : [];
     const telemetry = (body.telemetry || {}) as ClientTelemetryPayload;
 
@@ -38,6 +40,7 @@ export async function POST(request: NextRequest) {
       whatsapp_phone: normalizedPhone,
       whatsapp_raw: rawPhone,
       bombo_email: bomboEmail,
+      instagram_handle: instagramHandle || null,
       interest_ids: interestIds,
       visitor_token: visitorToken,
       anon_visitor_id: anonVisitorId,

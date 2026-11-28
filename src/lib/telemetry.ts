@@ -281,6 +281,24 @@ export function buildWaMeUrl(phone: string, message?: string): string {
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
 
+export function normalizeInstagramHandle(input: string): string {
+  let clean = (input || "").trim();
+  if (!clean) return "";
+  clean = clean
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .split(/[?#]/)[0]
+    .replace(/\/+$/, "")
+    .replace(/^@+/, "")
+    .replace(/\s+/g, "");
+  if (!clean) return "";
+  return `@${clean.toLowerCase()}`;
+}
+
+export function buildInstagramUrl(handle: string): string {
+  const clean = handle.replace(/^@+/, "").trim();
+  return `https://instagram.com/${encodeURIComponent(clean)}`;
+}
+
 export function extractRequestSnapshot(req: NextRequest) {
   const h = req.headers;
   return {
